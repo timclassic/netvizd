@@ -1,0 +1,6 @@
+*.swp
+.deps
+.libs
+Makefile
+Makefile.in
+netvizd

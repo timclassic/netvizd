@@ -1,0 +1,17 @@
+Makefile.in
+aclocal.m4
+autom4te.cache
+autoscan.log
+config.h.in
+configure
+libltdl
+install
+*.swp
+Makefile
+config.h
+config.log
+config.status
+libtool
+Session.vim
+stamp-h1
+compile

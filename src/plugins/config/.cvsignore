@@ -1,0 +1,10 @@
+.deps
+.libs
+*.swp
+Makefile
+Makefile.in
+*.la
+*.lo
+file_lexer.c
+file_parser.c
+file_parser.h

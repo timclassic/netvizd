@@ -22,4 +22,23 @@
 #include <config.h>
 #endif
 
+#include <nvconfig.h>
 #include <netvizd.h>
+
+int nv_config_init(char *plugin) {
+	int ret = 0;
+
+	/* load the configuration plugin */
+	ret = config_p_init(plugin);
+	if (ret < 0) {
+		return ret;
+	}
+
+
+
+
+
+}
+
+
+/* vim: set ts=4 sw=4: */

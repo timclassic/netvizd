@@ -18,8 +18,11 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
+#ifndef _NVTYPES_H_
+#define _NVTYPES_H_
+
+
+
 #endif
 
-#include <netvizd.h>
+/* vim: set ts=4 sw=4: */
