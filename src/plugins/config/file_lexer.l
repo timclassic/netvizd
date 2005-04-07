@@ -55,9 +55,14 @@ sensor			{ return SENSOR; }
 proto			{ return PROTO; }
 auth			{ return AUTH; }
 data_set		{ return DATA_SET; }
-time_series		{ return TIME_SERIES; }
+counter			{ return COUNTER; }
+derive			{ return DERIVE; }
+absolute		{ return ABSOLUTE; }
+gauge			{ return GAUGE; }
 yes				{ return YES; }
 no				{ return NO; }
+system			{ return SYSTEM; }
+description		{ return DESC; }
 
 ;				{ return SEMI; }
 \{				{ return LBRACE; }

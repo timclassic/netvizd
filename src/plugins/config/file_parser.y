@@ -19,6 +19,7 @@
  ***************************************************************************/
 
 %{
+#include <nvconfig.h>
 #include "file.h"
 
 #define YYDEBUG 0
@@ -32,6 +33,7 @@ static struct global_storage g_storage;
 static struct global_sensor g_sensor;
 static struct values *g_values;
 static struct data_set d_set;
+static struct system sys;
 
 void add_value(char *word, char *value);
 void clear_values();
@@ -46,10 +48,11 @@ void clear_values();
 			data_item plugin_block storage_block sensor_block dtype_stmt
 			sensor_stmt plugin_list plugin_item ptype_stmt file_stmt
 			generic_list generic_item top_list top_item storage_stmt
-			global_list2 data_list2 plugin_list2 generic_list2
+			global_list2 data_list2 plugin_list2 generic_list2 system_list
+			system_list2 system_item d_desc_stmt s_desc_stmt system_block
 %type <ch>	generic_item2
-%token <i>	GLOBAL PLUGIN TYPE FILEE STORAGE SENSOR PROTO AUTH DATA_SET
-			TIME_SERIES SEMI LBRACE RBRACE CRAP
+%token <i>	GLOBAL PLUGIN TYPE FILEE STORAGE SENSOR PROTO AUTH DATA_SET SEMI
+			LBRACE RBRACE CRAP SYSTEM DESC COUNTER DERIVE ABSOLUTE GAUGE
 %token <ch> WORD STRING INT YES NO
 
 %start start
@@ -63,13 +66,18 @@ top_list		: top_list top_item
 		  		| top_item
 
 top_item		: global_block SEMI
-	  			| data_block SEMI
+	  			| system_block SEMI
 
 global_block	: GLOBAL LBRACE global_list RBRACE
 
+system_block	: SYSTEM STRING { sys.name = $2; } LBRACE system_list RBRACE
+				{	add_system(&sys);
+					nv_free(sys.name);
+					nv_free(sys.desc); }
+
 data_block		: DATA_SET STRING LBRACE data_list RBRACE
 				{	d_set.name = $2;
-					add_data_set(&d_set);
+					add_data_set(&d_set, sys.name);
 					nv_free(d_set.name);
 					nv_free(d_set.sensor);
 					nv_free(d_set.storage); }
@@ -93,6 +101,16 @@ data_list2		: data_list2 data_item
 data_item		: dtype_stmt SEMI
 		   		| sensor_stmt SEMI
 				| storage_stmt SEMI
+				| d_desc_stmt SEMI
+
+system_list		: system_list2
+			 	| { }
+
+system_list2	: system_list2 system_item
+			 	| system_item
+
+system_item		: data_block SEMI
+				| s_desc_stmt SEMI
 
 plugin_block	: PLUGIN STRING LBRACE plugin_list RBRACE
 				{	g_plugin.name = $2;
@@ -118,11 +136,18 @@ sensor_block	: SENSOR STRING TYPE STRING LBRACE { push_generic(); }
 					nv_free(g_sensor.p_name);
 					clear_values(); }
 
-dtype_stmt		: TYPE TIME_SERIES	{ d_set.type = ds_type_time_series; }
+dtype_stmt		: TYPE COUNTER		{ d_set.type = ds_type_counter; }
+				| TYPE DERIVE		{ d_set.type = ds_type_derive; }
+				| TYPE ABSOLUTE		{ d_set.type = ds_type_absolute; }
+				| TYPE GAUGE		{ d_set.type = ds_type_gauge; }
+
+d_desc_stmt		: DESC STRING		{ d_set.desc = $2; }
 
 sensor_stmt		: SENSOR STRING		{ d_set.sensor = $2; }
 
 storage_stmt	: STORAGE STRING	{ d_set.storage = $2; }
+
+s_desc_stmt		: DESC STRING		{ sys.desc = $2; }
 
 plugin_list		: plugin_list2
 			 	| { }

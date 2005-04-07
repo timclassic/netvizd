@@ -2,8 +2,8 @@
 AM_CFLAGS = -DPKGLIBDIR=\"$(pkglibdir)\"
 
 bin_PROGRAMS = netvizd
-netvizd_SOURCES = netvizd.c plugin.c nvconfig.c
-noinst_HEADERS = netvizd.h plugin.h nvtypes.h nvconfig.h
+netvizd_SOURCES = netvizd.c plugin.c nvconfig.c nvlist.c
+noinst_HEADERS = netvizd.h plugin.h nvtypes.h nvconfig.h nvlist.h
 
 # set the include path found by configure
 INCLUDES= $(LTDLINCL) $(all_includes)

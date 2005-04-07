@@ -21,7 +21,94 @@
 #ifndef _CONFIG_H_
 #define _CONFIG_H_
 
+#include <netvizd.h>
 
+/* a loaded storage plugin */
+struct nv_stor_p {
+	char 				name[NAME_LEN];
+	char				file[NAME_LEN];
+};
+	
+/* a loaded sensor plugin */
+struct nv_sens_p {
+	char 				name[NAME_LEN];
+	char				file[NAME_LEN];
+};
+
+/* a loaded protocol plugin */
+struct nv_proto_p {
+	char 				name[NAME_LEN];
+	char				file[NAME_LEN];
+};
+
+/* a loaded authentication plugin */
+struct nv_auth_p {
+	char 				name[NAME_LEN];
+	char				file[NAME_LEN];
+};
+
+/* a linked list for the configuration options for a plugin instance */
+struct nv_conf {
+	char				key[NAME_LEN];
+	char				value[NAME_LEN];
+	struct nv_conf *	next;
+};
+
+/* an instance of a storage plugin */
+struct nv_stor {
+	char				name[NAME_LEN];
+	struct nv_stor_p *	plug;
+	struct nv_conf *	conf;
+};
+
+/* an instance of a sensor plugin */
+struct nv_sens {
+	char				name[NAME_LEN];
+	struct nv_sens_p *	plug;
+	struct nv_conf *	conf;
+};
+
+/* a system definition */
+struct nv_sys {
+	char				name[NAME_LEN];
+	char				desc[NAME_LEN];
+};
+
+/* a counter-based data set definition */
+struct nv_ds_counter {
+	char				name[NAME_LEN];
+	char				desc[NAME_LEN];
+	struct nv_sensor *	sens;
+	struct nv_storage *	stor;
+	struct nv_system *	sys;
+};
+
+/* a derive-based data set definition */
+struct nv_ds_derive {
+	char				name[NAME_LEN];
+	char				desc[NAME_LEN];
+	struct nv_sensor *	sens;
+	struct nv_storage *	stor;
+	struct nv_system *	sys;
+};
+
+/* a absolute-based data set definition */
+struct nv_ds_absolute {
+	char				name[NAME_LEN];
+	char				desc[NAME_LEN];
+	struct nv_sensor *	sens;
+	struct nv_storage *	stor;
+	struct nv_system *	sys;
+};
+
+/* a gauge-based data set definition */
+struct nv_ds_gauge {
+	char				name[NAME_LEN];
+	char				desc[NAME_LEN];
+	struct nv_sensor *	sens;
+	struct nv_storage *	stor;
+	struct nv_system *	sys;
+};
 
 #endif
 

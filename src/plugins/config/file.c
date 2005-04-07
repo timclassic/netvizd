@@ -24,6 +24,7 @@
 
 #include <netvizd.h>
 #include <plugin.h>
+#include <nvconfig.h>
 #include "file.h"
 
 #define PLUGIN_NAME		"file"
@@ -68,15 +69,29 @@ int file_free(struct config_p *p) {
 	return 0;
 }
 
+/*
+ * Called after each plugin defined in the global section of the config
+ * file.
+ */
 int add_plugin(struct global_plugin *p) {
 	printf("Adding plugin:\n");
 	printf("    name: %s\n", p->name);
 	printf("    type: %i\n", p->type);
 	printf("    file: %s\n", p->file);
 
+	
+	
+
+
+
+
 	return 0;
 }
 
+/*
+ * Called after each storage definition in the global section of the config
+ * file.
+ */
 int add_storage(struct global_storage *s, struct values *v) {
 	printf("Adding storage definition:\n");
 	printf("    name: %s\n", s->name);
@@ -89,6 +104,10 @@ int add_storage(struct global_storage *s, struct values *v) {
 	return 0;
 }
 
+/*
+ * Called after ach sensor definition in the global section of the config
+ * file.
+ */
 int add_sensor(struct global_sensor *s, struct values *v) {
 	printf("Adding sensor definition:\n");
 	printf("    name: %s\n", s->name);
@@ -101,12 +120,36 @@ int add_sensor(struct global_sensor *s, struct values *v) {
 	return 0;
 }
 
-int add_data_set(struct data_set *d) {
+/*
+ * Called after each data set definition within a system section in the
+ * config file.  Because of the way the parser is structured, we're only
+ * sure to have the name of the system so far and not the complete
+ * system structure.  We resolve this situation when the system definition
+ * is complete inside of add_system().
+ */
+int add_data_set(struct data_set *d, char *s_name) {
 	printf("Adding data set:\n");
 	printf("    name: %s\n", d->name);
+	printf("    system: %s\n", s_name);
+	printf("    description: %s\n", d->desc);
 	printf("    type: %i\n", d->type);
 	printf("    sensor: %s\n", d->sensor);
 	printf("    storage: %s\n", d->storage);
+
+	return 0;
+}
+
+/*
+ * Called after an entire system block has been defined in the config file.
+ * We have all the data set definitions for this system, so make sure
+ * they're all connected properly.
+ */
+int add_system(struct system *s) {
+	printf("Adding system:\n");
+	printf("    name: %s\n", s->name);
+	printf("    description: %s\n", s->desc);
+
+	return 0;
 }
 
 /* vim: set ts=4 sw=4: */

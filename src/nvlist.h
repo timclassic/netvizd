@@ -18,72 +18,36 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
-#ifndef _FILE_H_
-#define _FILE_H_
+#ifndef _HEADER_H_
+#define _HEADER_H_
 
 #include <netvizd.h>
-#include <nvconfig.h>
 
 /*
- * The following data structures are used to hold parsed information
- * temporarily until a complete structure can be submitted to file.c
- * and added to the global configuration.
+ * Generic list data structure.
+ * The data element of the conventional first element (the one that
+ * represents the linked list) is NULL
  */
-
-enum p_type {
-	p_type_storage,
-	p_type_sensor,
-	p_type_proto,
-	p_type_auth
+struct _nv_list {
+	struct _nv_list *	next;
+	struct _nv_list *	prev;
+	void *				data;
 };
 
-struct global_plugin {
-	char *			name;
-	enum p_type		type;
-	char *			file;
-};
+/* Statically initialize a new linked list */
+#define nv_list(var) struct _nv_list (var) = { NULL, NULL, NULL }
 
-struct values {
-	char *			word;
-	char *			value;
-	struct values *	next;
-};
+/* Dynamically initialize a new linked list */
+#define nv_list_new(var)	struct _nv_list *(var); \
+							(var) = nv_calloc(struct _nv_list, 1)
 
-struct global_storage {
-	char *			name;
-	char *			p_name;
-};
-
-struct global_sensor {
-	char *			name;
-	char *			p_name;
-};
-
-enum ds_type {
-	ds_type_counter,
-	ds_type_derive,
-	ds_type_absolute,
-	ds_type_gauge
-};
-
-struct data_set {
-	char *			name;
-	char *			system;
-	char *			desc;
-	enum ds_type	type;
-	char *			sensor;
-	char *			storage;
-};
-
-struct system {
-	char *			name;
-	char *			desc;
-};
-
-int add_plugin(struct global_plugin *p);
-int add_storage(struct global_storage *s, struct values *v);
-int add_sensor(struct global_sensor *s, struct values *v);
-int add_data_set(struct data_set *d, char *s_name);
-int add_system(struct system *s);
+/* Clean a linked list.  This frees all nodes except for the conventional
+ * first element.  It if is dynamically allocated, call nv_list_free() to
+ * free it.  The programmer is responsible for freeing all data associated
+ * with the linked list before calling this.
+ */
+static inline nv_list_clean(struct _nv_list *l) {
+	/* TODO write nv_list_clean() */
+}
 
 #endif
