@@ -35,6 +35,7 @@
 int config_init(struct config_p *p);
 static int file_reload(struct config_p *p);
 static int file_free(struct config_p *p);
+static int create_conf();
 
 int yylex();
 extern FILE *yyin;
@@ -51,14 +52,27 @@ int config_init(struct config_p *p) {
 	p->free = file_free;
 
 	/* read in our config file */
-	cfile = fopen("/net/hu13/tims/cs3901/netvizd/netvizd.conf", "r");
+	cfile = fopen("/home/tim/cs3901/netvizd/netvizd.conf", "r");
 	yyin = cfile;
 	ret = yyparse();
 	if (ret != 0) {
-		nv_log(LOG_INFO, "configuration file parse failed, aborting");
+		nv_log(LOG_ERROR, "configuration file parse failed, aborting");
 		stat = -1;
+		goto cleanup;
 	}
 
+	/* Now we need to go through our lists and try to create netvizd's
+	 * internal configuration.  This involves using nvconfig.h's
+	 * structs and resolving the links between various plugins, instances,
+	 * and data sets. */
+	ret = create_conf();
+	if (ret != 0) {
+		nv_log(LOG_ERROR, "configuration failed, aborting");
+		stat = -1;
+		goto cleanup;
+	}
+
+cleanup:
 	return stat;
 }
 
@@ -167,7 +181,7 @@ int add_storage(struct global_storage *s, struct values *v) {
 
 	/* find the plugin for this instance */
 	stat = -1;
-	list_for_each(n, &nv_stor_list) {
+	list_for_each(n, &nv_stor_p_list) {
 		struct nv_stor_p *p;
 		p = node_data(struct nv_stor_p, n);
 		if (strncmp(p->name, s->p_name, NAME_LEN) == 0) {
@@ -228,6 +242,19 @@ int add_system(struct system *s) {
 	nv_log(LOG_DEBUG, "    description: %s", s->desc);
 
 	return 0;
+}
+
+/*
+ * Here we iterate over our linked lists and create the internal
+ * configuration as defined in nvconfig.h.  We throw errors for things
+ * like names that don't match within the config file or other obvious
+ * things that are specific to this type of configuration plugin.  If
+ * everything looks OK here, validate_conf() in the main app will verify
+ * that we have enough things defined to actually run.
+ */
+int create_conf() {
+
+
 }
 
 /* vim: set ts=4 sw=4: */

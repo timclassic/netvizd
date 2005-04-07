@@ -29,9 +29,9 @@
  * represents the linked list) is NULL.  If this is not true then things
  * will break.
  */
-typedef struct nv_list {
-	struct nv_list *	next;
-	struct nv_list *	prev;
+typedef struct _nv_list {
+	struct _nv_list *	next;
+	struct _nv_list *	prev;
 	void *				data;
 } nv_list;
 #define nv_node		nv_list *
@@ -58,11 +58,11 @@ typedef struct nv_list {
 
 /* Traverse a linked list */
 #define list_for_each(pos, head) \
-	for (pos = (head)->next; pos != (head); pos = pos->next)
+	for (pos = (head)->next; pos != (head) && pos != NULL; pos = pos->next)
 
 /* Traverse a linked list, backwards */
 #define list_for_each_prev(pos, head) \
-	for (pos = (head)->prev; pos != (head); pos = pos->prev)
+	for (pos = (head)->prev; pos != (head) && post != NULL; pos = pos->prev)
 
 /* Insert a node after the specified node in the list.  To insert at the
  * beginning of the list, speficy the conventional first element. */
@@ -85,9 +85,12 @@ static inline void list_insert(nv_node p, nv_node n) {
 }
 
 /* Append a node at the end of a list.  Specify the conventional first
- * element for the first argument.  Note that the first argument expects
- * a pointer. */
-#define list_append(l, n) list_insert((l)->prev, (n))
+ * element for the first argument. */
+static inline void list_append(nv_list *l, nv_node n) {
+	if (l == NULL || n == NULL) return;
+	if (l->data == NULL) list_insert(l, n);
+	else list_insert(l->prev, n);
+};
 
 /* Remove an node from the list.  We do not need anything but the node.
  * The programmer is responsible for freeing the data inside the node. */
