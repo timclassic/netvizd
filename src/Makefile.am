@@ -2,7 +2,7 @@
 AM_CFLAGS = -DPKGLIBDIR=\"$(pkglibdir)\"
 
 bin_PROGRAMS = netvizd
-netvizd_SOURCES = netvizd.c plugin.c nvconfig.c nvlist.c
+netvizd_SOURCES = netvizd.c plugin.c nvconfig.c
 noinst_HEADERS = netvizd.h plugin.h nvtypes.h nvconfig.h nvlist.h
 
 # set the include path found by configure

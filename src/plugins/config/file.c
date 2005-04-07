@@ -25,6 +25,7 @@
 #include <netvizd.h>
 #include <plugin.h>
 #include <nvconfig.h>
+#include <nvlist.h>
 #include "file.h"
 
 #define PLUGIN_NAME		"file"
@@ -50,7 +51,7 @@ int config_init(struct config_p *p) {
 	p->free = file_free;
 
 	/* read in our config file */
-	cfile = fopen("/home/tim/cs3901/netvizd/netvizd.conf", "r");
+	cfile = fopen("/net/hu13/tims/cs3901/netvizd/netvizd.conf", "r");
 	yyin = cfile;
 	ret = yyparse();
 	if (ret != 0) {
@@ -74,16 +75,69 @@ int file_free(struct config_p *p) {
  * file.
  */
 int add_plugin(struct global_plugin *p) {
-	printf("Adding plugin:\n");
-	printf("    name: %s\n", p->name);
-	printf("    type: %i\n", p->type);
-	printf("    file: %s\n", p->file);
+	union {
+		struct nv_stor_p *	stor;
+		struct nv_sens_p *	sens;
+		struct nv_proto_p *	proto;
+		struct nv_auth_p *	auth;
+	} plug;
+	union {
+		nv_node		stor;
+		nv_node		sens;
+		nv_node		proto;
+		nv_node		auth;
+	} node;
 
-	
-	
+	nv_log(LOG_DEBUG, "Adding plugin:");
+	nv_log(LOG_DEBUG, "    name: %s", p->name);
+	nv_log(LOG_DEBUG, "    type: %i", p->type);
+	nv_log(LOG_DEBUG, "    file: %s", p->file);
 
+	switch(p->type) {
+		case p_type_storage:
+			plug.stor = nv_calloc(struct nv_stor_p, 1);
+			strncpy(plug.stor->name, p->name, NAME_LEN);
+			plug.stor->name[NAME_LEN-1] = '\0';
+			strncpy(plug.stor->file, p->file, NAME_LEN);
+			plug.stor->file[NAME_LEN-1] = '\0';
+			nv_node_new(node.stor);
+			set_node_data(node.stor, plug.stor);
+			list_append(&nv_stor_p_list, node.stor);
+			break;
 
+		case p_type_sensor:
+			plug.sens = nv_calloc(struct nv_sens_p, 1);
+			strncpy(plug.sens->name, p->name, NAME_LEN);
+			plug.sens->name[NAME_LEN-1] = '\0';
+			strncpy(plug.sens->file, p->file, NAME_LEN);
+			plug.sens->file[NAME_LEN-1] = '\0';
+			nv_node_new(node.sens);
+			set_node_data(node.sens, plug.sens);
+			list_append(&nv_sens_p_list, node.sens);
+			break;
 
+		case p_type_proto:
+			plug.proto = nv_calloc(struct nv_proto_p, 1);
+			strncpy(plug.proto->name, p->name, NAME_LEN);
+			plug.proto->name[NAME_LEN-1] = '\0';
+			strncpy(plug.proto->file, p->file, NAME_LEN);
+			plug.proto->file[NAME_LEN-1] = '\0';
+			nv_node_new(node.proto);
+			set_node_data(node.proto, plug.proto);
+			list_append(&nv_proto_p_list, node.proto);
+			break;
+
+		case p_type_auth:
+			plug.auth = nv_calloc(struct nv_auth_p, 1);
+			strncpy(plug.auth->name, p->name, NAME_LEN);
+			plug.auth->name[NAME_LEN-1] = '\0';
+			strncpy(plug.auth->file, p->file, NAME_LEN);
+			plug.auth->file[NAME_LEN-1] = '\0';
+			nv_node_new(node.auth);
+			set_node_data(node.auth, plug.auth);
+			list_append(&nv_auth_p_list, node.auth);
+			break;
+	}
 
 	return 0;
 }
@@ -93,15 +147,39 @@ int add_plugin(struct global_plugin *p) {
  * file.
  */
 int add_storage(struct global_storage *s, struct values *v) {
-	printf("Adding storage definition:\n");
-	printf("    name: %s\n", s->name);
-	printf("    plugin name: %s\n", s->p_name);
-	printf("    values:\n");
+	struct nv_stor *stor;
+	int stat = 0;
+	nv_node n;
+
+	nv_log(LOG_DEBUG, "Adding storage definition:");
+	nv_log(LOG_DEBUG, "    name: %s", s->name);
+	nv_log(LOG_DEBUG, "    plugin name: %s", s->p_name);
+	nv_log(LOG_DEBUG, "    values:");
 	while (v != NULL) {
-		printf("        %s, %s\n", v->word, v->value);
+		nv_log(LOG_DEBUG, "        %s, %s", v->word, v->value);
 		v = v->next;
 	}
-	return 0;
+
+	/* save the instance name */
+	stor = nv_calloc(struct nv_stor, 1);
+	strncpy(stor->name, s->name, NAME_LEN);
+	stor->name[NAME_LEN-1] = '\0';
+
+	/* find the plugin for this instance */
+	stat = -1;
+	list_for_each(n, &nv_stor_list) {
+		struct nv_stor_p *p;
+		p = node_data(struct nv_stor_p, n);
+		if (strncmp(p->name, s->p_name, NAME_LEN) == 0) {
+			stor->plug = p;
+			stat = 0;
+			nv_log(LOG_DEBUG, "Found the correct storage plugin");
+		}
+	}
+
+	/* save the configuration of this instance */
+	
+	return stat;
 }
 
 /*
@@ -109,12 +187,12 @@ int add_storage(struct global_storage *s, struct values *v) {
  * file.
  */
 int add_sensor(struct global_sensor *s, struct values *v) {
-	printf("Adding sensor definition:\n");
-	printf("    name: %s\n", s->name);
-	printf("    plugin name: %s\n", s->p_name);
-	printf("    values:\n");
+	nv_log(LOG_DEBUG, "Adding sensor definition:");
+	nv_log(LOG_DEBUG, "    name: %s", s->name);
+	nv_log(LOG_DEBUG, "    plugin name: %s", s->p_name);
+	nv_log(LOG_DEBUG, "    values:");
 	while (v != NULL) {
-		printf("        %s, %s\n", v->word, v->value);
+		nv_log(LOG_DEBUG, "        %s, %s", v->word, v->value);
 		v = v->next;
 	}
 	return 0;
@@ -128,13 +206,13 @@ int add_sensor(struct global_sensor *s, struct values *v) {
  * is complete inside of add_system().
  */
 int add_data_set(struct data_set *d, char *s_name) {
-	printf("Adding data set:\n");
-	printf("    name: %s\n", d->name);
-	printf("    system: %s\n", s_name);
-	printf("    description: %s\n", d->desc);
-	printf("    type: %i\n", d->type);
-	printf("    sensor: %s\n", d->sensor);
-	printf("    storage: %s\n", d->storage);
+	nv_log(LOG_DEBUG, "Adding data set:");
+	nv_log(LOG_DEBUG, "    name: %s", d->name);
+	nv_log(LOG_DEBUG, "    system: %s", s_name);
+	nv_log(LOG_DEBUG, "    description: %s", d->desc);
+	nv_log(LOG_DEBUG, "    type: %i", d->type);
+	nv_log(LOG_DEBUG, "    sensor: %s", d->sensor);
+	nv_log(LOG_DEBUG, "    storage: %s", d->storage);
 
 	return 0;
 }
@@ -145,9 +223,9 @@ int add_data_set(struct data_set *d, char *s_name) {
  * they're all connected properly.
  */
 int add_system(struct system *s) {
-	printf("Adding system:\n");
-	printf("    name: %s\n", s->name);
-	printf("    description: %s\n", s->desc);
+	nv_log(LOG_DEBUG, "Adding system:");
+	nv_log(LOG_DEBUG, "    name: %s", s->name);
+	nv_log(LOG_DEBUG, "    description: %s", s->desc);
 
 	return 0;
 }

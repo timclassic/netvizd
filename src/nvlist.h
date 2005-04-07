@@ -18,36 +18,87 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
-#ifndef _HEADER_H_
-#define _HEADER_H_
+#ifndef _NVLIST_H_
+#define _NVLIST_H_
 
 #include <netvizd.h>
 
 /*
  * Generic list data structure.
  * The data element of the conventional first element (the one that
- * represents the linked list) is NULL
+ * represents the linked list) is NULL.  If this is not true then things
+ * will break.
  */
-struct _nv_list {
-	struct _nv_list *	next;
-	struct _nv_list *	prev;
+typedef struct nv_list {
+	struct nv_list *	next;
+	struct nv_list *	prev;
 	void *				data;
-};
+} nv_list;
+#define nv_node		nv_list *
 
 /* Statically initialize a new linked list */
-#define nv_list(var) struct _nv_list (var) = { NULL, NULL, NULL }
+#define nv_list(name) \
+	nv_list (name) = { NULL, NULL, NULL }
 
 /* Dynamically initialize a new linked list */
-#define nv_list_new(var)	struct _nv_list *(var); \
-							(var) = nv_calloc(struct _nv_list, 1)
+#define nv_list_new(name) \
+	name = nv_calloc(nv_list, 1)
 
-/* Clean a linked list.  This frees all nodes except for the conventional
- * first element.  It if is dynamically allocated, call nv_list_free() to
- * free it.  The programmer is responsible for freeing all data associated
- * with the linked list before calling this.
- */
-static inline nv_list_clean(struct _nv_list *l) {
-	/* TODO write nv_list_clean() */
+/* Dynamically initialize a new node */
+#define nv_node_new(name) \
+	name = nv_calloc(nv_list, 1);
+
+/* Get the actual data of a given type out of a node */
+#define node_data(type, node) \
+	(type *)((node)->data)
+
+/* Set the data for a node. */
+#define set_node_data(node, d) \
+	(node)->data = (void *)(d)
+
+/* Traverse a linked list */
+#define list_for_each(pos, head) \
+	for (pos = (head)->next; pos != (head); pos = pos->next)
+
+/* Traverse a linked list, backwards */
+#define list_for_each_prev(pos, head) \
+	for (pos = (head)->prev; pos != (head); pos = pos->prev)
+
+/* Insert a node after the specified node in the list.  To insert at the
+ * beginning of the list, speficy the conventional first element. */
+static inline void list_insert(nv_node p, nv_node n) {
+	if (p == NULL || n == NULL) return;
+	if (p->data == NULL) {
+		/* we're on the conventional first element ... */
+		p->next = n;
+		p->prev = n;
+		n->next = p;
+		n->prev = p;
+	} else {
+		/* ... or we're not. */
+		nv_node t = p->next;
+		n->next = t;
+		n->prev = p;
+		p->next = n;
+		t->prev = n;
+	}
+}
+
+/* Append a node at the end of a list.  Specify the conventional first
+ * element for the first argument.  Note that the first argument expects
+ * a pointer. */
+#define list_append(l, n) list_insert((l)->prev, (n))
+
+/* Remove an node from the list.  We do not need anything but the node.
+ * The programmer is responsible for freeing the data inside the node. */
+static inline void list_del(nv_node n) {
+	if (n == NULL) return;
+	if (n->data == NULL) return;
+	n->prev->next = n->next;
+	n->next->prev = n->prev;
+	nv_free(n);
 }
 
 #endif
+
+/* vim: set ts=4 sw=4: */

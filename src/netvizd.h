@@ -90,7 +90,7 @@ if (_nv_pth_status != 0) { \
 	nv_log(LOG_ERROR, "pthread_cond_signal()", _nv_pth_status); \
 	exit(PTHREAD_EXIT); \
 }
-int _nv_pth_status;
+static int _nv_pth_status;
 
 /*
  * Temporary buffer length.

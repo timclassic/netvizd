@@ -22,8 +22,21 @@
 #include <config.h>
 #endif
 
-#include <nvconfig.h>
+#define NV_GLOBAL_CONFIG
+
 #include <netvizd.h>
+#include <nvconfig.h>
+#include <nvlist.h>
+
+/* Global linked lists */
+nv_list(nv_stor_p_list);
+nv_list(nv_sens_p_list);
+nv_list(nv_proto_p_list);
+nv_list(nv_auth_p_list);
+nv_list(nv_stor_list);
+nv_list(nv_sens_list);
+nv_list(nv_proto_list);
+nv_list(nv_auth_list);
 
 int nv_config_init(char *plugin) {
 	int ret = 0;
