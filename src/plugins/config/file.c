@@ -18,6 +18,19 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
+// SAMPLE LOOP CODE - USE LATER
+//	/* find the plugin for this instance */
+//	stat = -1;
+//	list_for_each(n, &nv_stor_p_list) {
+//		struct nv_stor_p *p;
+//		p = node_data(struct nv_stor_p, n);
+//		if (strncmp(p->name, s->p_name, NAME_LEN) == 0) {
+//			stor->plug = p;
+//			stat = 0;
+//			nv_log(LOG_DEBUG, "Found the correct storage plugin");
+//		}
+//	}
+
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -39,6 +52,12 @@ static int create_conf();
 
 int yylex();
 extern FILE *yyin;
+
+static nv_list(file_plug_list);
+static nv_list(file_stor_list);
+static nv_list(file_sens_list);
+static nv_list(file_dset_list);
+static nv_list(file_sys_list);
 
 int config_init(struct config_p *p) {
 	FILE *cfile = NULL;
@@ -88,128 +107,63 @@ int file_free(struct config_p *p) {
  * Called after each plugin defined in the global section of the config
  * file.
  */
-int add_plugin(struct global_plugin *p) {
-	union {
-		struct nv_stor_p *	stor;
-		struct nv_sens_p *	sens;
-		struct nv_proto_p *	proto;
-		struct nv_auth_p *	auth;
-	} plug;
-	union {
-		nv_node		stor;
-		nv_node		sens;
-		nv_node		proto;
-		nv_node		auth;
-	} node;
+void add_plugin(struct global_plugin *p) {
+	nv_node n = NULL;
 
-	nv_log(LOG_DEBUG, "Adding plugin:");
+	nv_log(LOG_DEBUG, "Adding plugin to internal list:");
 	nv_log(LOG_DEBUG, "    name: %s", p->name);
 	nv_log(LOG_DEBUG, "    type: %i", p->type);
 	nv_log(LOG_DEBUG, "    file: %s", p->file);
 
-	switch(p->type) {
-		case p_type_storage:
-			plug.stor = nv_calloc(struct nv_stor_p, 1);
-			strncpy(plug.stor->name, p->name, NAME_LEN);
-			plug.stor->name[NAME_LEN-1] = '\0';
-			strncpy(plug.stor->file, p->file, NAME_LEN);
-			plug.stor->file[NAME_LEN-1] = '\0';
-			nv_node_new(node.stor);
-			set_node_data(node.stor, plug.stor);
-			list_append(&nv_stor_p_list, node.stor);
-			break;
-
-		case p_type_sensor:
-			plug.sens = nv_calloc(struct nv_sens_p, 1);
-			strncpy(plug.sens->name, p->name, NAME_LEN);
-			plug.sens->name[NAME_LEN-1] = '\0';
-			strncpy(plug.sens->file, p->file, NAME_LEN);
-			plug.sens->file[NAME_LEN-1] = '\0';
-			nv_node_new(node.sens);
-			set_node_data(node.sens, plug.sens);
-			list_append(&nv_sens_p_list, node.sens);
-			break;
-
-		case p_type_proto:
-			plug.proto = nv_calloc(struct nv_proto_p, 1);
-			strncpy(plug.proto->name, p->name, NAME_LEN);
-			plug.proto->name[NAME_LEN-1] = '\0';
-			strncpy(plug.proto->file, p->file, NAME_LEN);
-			plug.proto->file[NAME_LEN-1] = '\0';
-			nv_node_new(node.proto);
-			set_node_data(node.proto, plug.proto);
-			list_append(&nv_proto_p_list, node.proto);
-			break;
-
-		case p_type_auth:
-			plug.auth = nv_calloc(struct nv_auth_p, 1);
-			strncpy(plug.auth->name, p->name, NAME_LEN);
-			plug.auth->name[NAME_LEN-1] = '\0';
-			strncpy(plug.auth->file, p->file, NAME_LEN);
-			plug.auth->file[NAME_LEN-1] = '\0';
-			nv_node_new(node.auth);
-			set_node_data(node.auth, plug.auth);
-			list_append(&nv_auth_p_list, node.auth);
-			break;
-	}
-
-	return 0;
+	nv_node_new(n);
+	set_node_data(n, p);
+	list_append(&file_plug_list, n);
 }
 
 /*
  * Called after each storage definition in the global section of the config
  * file.
  */
-int add_storage(struct global_storage *s, struct values *v) {
-	struct nv_stor *stor;
-	int stat = 0;
+void add_storage(struct global_storage *s) {
 	nv_node n;
+	nv_node i;
 
-	nv_log(LOG_DEBUG, "Adding storage definition:");
+	nv_log(LOG_DEBUG, "Adding storage definition to internal list:");
 	nv_log(LOG_DEBUG, "    name: %s", s->name);
 	nv_log(LOG_DEBUG, "    plugin name: %s", s->p_name);
 	nv_log(LOG_DEBUG, "    values:");
-	while (v != NULL) {
+	list_for_each(i, s->values) {
+		struct values *v = NULL;
+		v = node_data(struct values, i);
 		nv_log(LOG_DEBUG, "        %s, %s", v->word, v->value);
-		v = v->next;
 	}
 
-	/* save the instance name */
-	stor = nv_calloc(struct nv_stor, 1);
-	strncpy(stor->name, s->name, NAME_LEN);
-	stor->name[NAME_LEN-1] = '\0';
-
-	/* find the plugin for this instance */
-	stat = -1;
-	list_for_each(n, &nv_stor_p_list) {
-		struct nv_stor_p *p;
-		p = node_data(struct nv_stor_p, n);
-		if (strncmp(p->name, s->p_name, NAME_LEN) == 0) {
-			stor->plug = p;
-			stat = 0;
-			nv_log(LOG_DEBUG, "Found the correct storage plugin");
-		}
-	}
-
-	/* save the configuration of this instance */
-	
-	return stat;
+	nv_node_new(n);
+	set_node_data(n, s);
+	list_append(&file_stor_list, n);
 }
 
 /*
- * Called after ach sensor definition in the global section of the config
+ * Called after each sensor definition in the global section of the config
  * file.
  */
-int add_sensor(struct global_sensor *s, struct values *v) {
-	nv_log(LOG_DEBUG, "Adding sensor definition:");
+void add_sensor(struct global_sensor *s) {
+	nv_node n;
+	nv_node i;
+	
+	nv_log(LOG_DEBUG, "Adding sensor definition to internal list:");
 	nv_log(LOG_DEBUG, "    name: %s", s->name);
 	nv_log(LOG_DEBUG, "    plugin name: %s", s->p_name);
 	nv_log(LOG_DEBUG, "    values:");
-	while (v != NULL) {
+	list_for_each(i, s->values) {
+		struct values *v = NULL;
+		v = node_data(struct values, i);
 		nv_log(LOG_DEBUG, "        %s, %s", v->word, v->value);
-		v = v->next;
 	}
-	return 0;
+
+	nv_node_new(n);
+	set_node_data(n, s);
+	list_append(&file_sens_list, n);
 }
 
 /*
@@ -219,16 +173,20 @@ int add_sensor(struct global_sensor *s, struct values *v) {
  * system structure.  We resolve this situation when the system definition
  * is complete inside of add_system().
  */
-int add_data_set(struct data_set *d, char *s_name) {
-	nv_log(LOG_DEBUG, "Adding data set:");
+void add_data_set(struct data_set *d) {
+	nv_node n;
+
+	nv_log(LOG_DEBUG, "Adding data set to internal list:");
 	nv_log(LOG_DEBUG, "    name: %s", d->name);
-	nv_log(LOG_DEBUG, "    system: %s", s_name);
+	nv_log(LOG_DEBUG, "    system: %s", d->s_name);
 	nv_log(LOG_DEBUG, "    description: %s", d->desc);
 	nv_log(LOG_DEBUG, "    type: %i", d->type);
 	nv_log(LOG_DEBUG, "    sensor: %s", d->sensor);
 	nv_log(LOG_DEBUG, "    storage: %s", d->storage);
 
-	return 0;
+	nv_node_new(n);
+	set_node_data(n, d);
+	list_append(&file_dset_list, n);
 }
 
 /*
@@ -236,12 +194,16 @@ int add_data_set(struct data_set *d, char *s_name) {
  * We have all the data set definitions for this system, so make sure
  * they're all connected properly.
  */
-int add_system(struct system *s) {
-	nv_log(LOG_DEBUG, "Adding system:");
+void add_system(struct system *s) {
+	nv_node n;
+
+	nv_log(LOG_DEBUG, "Adding system to internal list:");
 	nv_log(LOG_DEBUG, "    name: %s", s->name);
 	nv_log(LOG_DEBUG, "    description: %s", s->desc);
 
-	return 0;
+	nv_node_new(n);
+	set_node_data(n, s);
+	list_append(&file_sys_list, n);
 }
 
 /*
@@ -250,7 +212,8 @@ int add_system(struct system *s) {
  * like names that don't match within the config file or other obvious
  * things that are specific to this type of configuration plugin.  If
  * everything looks OK here, validate_conf() in the main app will verify
- * that we have enough things defined to actually run.
+ * that we have enough things defined to actually run.  We also have to
+ * free the memory allocated by the parser.
  */
 int create_conf() {
 

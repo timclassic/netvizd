@@ -68,14 +68,14 @@ typedef struct _nv_list {
  * beginning of the list, speficy the conventional first element. */
 static inline void list_insert(nv_node p, nv_node n) {
 	if (p == NULL || n == NULL) return;
-	if (p->data == NULL) {
-		/* we're on the conventional first element ... */
+	if (p->next == NULL) {
+		/* the list is empty */
 		p->next = n;
 		p->prev = n;
 		n->next = p;
 		n->prev = p;
 	} else {
-		/* ... or we're not. */
+		/* list not empty */
 		nv_node t = p->next;
 		n->next = t;
 		n->prev = p;
@@ -88,7 +88,7 @@ static inline void list_insert(nv_node p, nv_node n) {
  * element for the first argument. */
 static inline void list_append(nv_list *l, nv_node n) {
 	if (l == NULL || n == NULL) return;
-	if (l->data == NULL) list_insert(l, n);
+	if (l->next == NULL) list_insert(l, n);
 	else list_insert(l->prev, n);
 };
 

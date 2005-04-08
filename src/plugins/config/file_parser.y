@@ -31,7 +31,7 @@ void pop_generic();
 static struct global_plugin g_plugin;
 static struct global_storage g_storage;
 static struct global_sensor g_sensor;
-static struct values *g_values;
+static nv_list *g_values = NULL;
 static struct data_set d_set;
 static struct system sys;
 
@@ -71,16 +71,12 @@ top_item		: global_block SEMI
 global_block	: GLOBAL LBRACE global_list RBRACE
 
 system_block	: SYSTEM STRING { sys.name = $2; } LBRACE system_list RBRACE
-				{	add_system(&sys);
-					nv_free(sys.name);
-					nv_free(sys.desc); }
+				{	add_system(&sys); }
 
 data_block		: DATA_SET STRING LBRACE data_list RBRACE
 				{	d_set.name = $2;
-					add_data_set(&d_set, sys.name);
-					nv_free(d_set.name);
-					nv_free(d_set.sensor);
-					nv_free(d_set.storage); }
+					d_set.s_name = sys.name;
+					add_data_set(&d_set); }
 
 global_list		: global_list2
 			 	| { }
@@ -114,26 +110,22 @@ system_item		: data_block SEMI
 
 plugin_block	: PLUGIN STRING LBRACE plugin_list RBRACE
 				{	g_plugin.name = $2;
-					add_plugin(&g_plugin);
-					nv_free(g_plugin.name);
-					nv_free(g_plugin.file); }
+					add_plugin(&g_plugin); }
 
 storage_block	: STORAGE STRING TYPE STRING LBRACE { push_generic(); }
 				  generic_list
 				{	g_storage.name = $2;
 					g_storage.p_name = $4;
-					add_storage(&g_storage, g_values);
-					nv_free(g_storage.name);
-					nv_free(g_storage.p_name);
+					g_storage.values = g_values;
+					add_storage(&g_storage);
 					clear_values(); }
 
 sensor_block	: SENSOR STRING TYPE STRING LBRACE { push_generic(); }
 				  generic_list
 				{	g_sensor.name = $2;
 					g_sensor.p_name = $4;
-					add_sensor(&g_sensor, g_values);
-					nv_free(g_sensor.name);
-					nv_free(g_sensor.p_name);
+					g_sensor.values = g_values;
+					add_sensor(&g_sensor);
 					clear_values(); }
 
 dtype_stmt		: TYPE COUNTER		{ d_set.type = ds_type_counter; }
@@ -187,39 +179,21 @@ generic_item2 	: STRING
  */
 
 void add_value(char *word, char *value) {
+	nv_node n;
 	struct values *v = NULL;
-	
-	/* find last entry and allocate a new one */
-	v = g_values;
-	if (v == NULL) {
-		g_values = nv_calloc(struct values, 1);
-		v = g_values;
-	} else {
-		while (v->next != NULL)
-			v = v->next;
-		v->next = nv_calloc(struct values, 1);
-		v = v->next;
-	}
 
-	/* fill in info */
+	if (g_values == NULL)
+		nv_list_new(g_values);
+	v = nv_calloc(struct values, 1);
 	v->word = word;
 	v->value = value;
-	v->next = NULL;
+
+	nv_node_new(n);
+	set_node_data(n, v);
+	list_append(g_values, n);
 }
 
 void clear_values() {
-	struct values *v = NULL;
-	struct values *next = NULL;
-
-	/* loop and free all memory */
-	v = g_values;
-	while (v != NULL) {
-		next = v->next;
-		nv_free(v->word);
-		nv_free(v->value);
-		nv_free(v);
-		v = next;
-	}
 	g_values = NULL;
 }
 

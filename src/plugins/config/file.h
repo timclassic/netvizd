@@ -46,17 +46,18 @@ struct global_plugin {
 struct values {
 	char *			word;
 	char *			value;
-	struct values *	next;
 };
 
 struct global_storage {
 	char *			name;
 	char *			p_name;
+	nv_list *		values;
 };
 
 struct global_sensor {
 	char *			name;
 	char *			p_name;
+	nv_list *		values;
 };
 
 enum ds_type {
@@ -68,6 +69,7 @@ enum ds_type {
 
 struct data_set {
 	char *			name;
+	char *			s_name;
 	char *			system;
 	char *			desc;
 	enum ds_type	type;
@@ -80,10 +82,10 @@ struct system {
 	char *			desc;
 };
 
-int add_plugin(struct global_plugin *p);
-int add_storage(struct global_storage *s, struct values *v);
-int add_sensor(struct global_sensor *s, struct values *v);
-int add_data_set(struct data_set *d, char *s_name);
-int add_system(struct system *s);
+void add_plugin(struct global_plugin *p);
+void add_storage(struct global_storage *s);
+void add_sensor(struct global_sensor *s);
+void add_data_set(struct data_set *d);
+void add_system(struct system *s);
 
 #endif
