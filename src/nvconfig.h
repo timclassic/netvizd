@@ -48,25 +48,25 @@ struct nv_auth_p {
 	char				file[NAME_LEN];
 };
 
-/* a linked list for the configuration options for a plugin instance */
+/* struct for a linked list of the configuration options for a plugin
+ * instance */
 struct nv_conf {
 	char				key[NAME_LEN];
 	char				value[NAME_LEN];
-	struct nv_conf *	next;
 };
 
 /* an instance of a storage plugin */
 struct nv_stor {
 	char				name[NAME_LEN];
 	struct nv_stor_p *	plug;
-	struct nv_conf *	conf;
+	nv_list *			conf;
 };
 
 /* an instance of a sensor plugin */
 struct nv_sens {
 	char				name[NAME_LEN];
 	struct nv_sens_p *	plug;
-	struct nv_conf *	conf;
+	nv_list *			conf;
 };
 
 /* a system definition */
@@ -118,8 +118,7 @@ extern nv_list nv_proto_p_list;
 extern nv_list nv_auth_p_list;
 extern nv_list nv_stor_list;
 extern nv_list nv_sens_list;
-extern nv_list nv_proto_list;
-extern nv_list nv_auth_list;
+extern nv_list nv_sys_list;
 #endif /* NV_GLOBAL_CONFIG */
 
 #endif

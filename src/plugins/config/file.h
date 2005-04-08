@@ -70,7 +70,6 @@ enum ds_type {
 struct data_set {
 	char *			name;
 	char *			s_name;
-	char *			system;
 	char *			desc;
 	enum ds_type	type;
 	char *			sensor;
@@ -87,5 +86,6 @@ void add_storage(struct global_storage *s);
 void add_sensor(struct global_sensor *s);
 void add_data_set(struct data_set *d);
 void add_system(struct system *s);
+int begin_parse();
 
 #endif

@@ -34,11 +34,7 @@
  */
 int debug_mode = 0;
 
-/*
- * Global plugin lists
- */
-struct config_p *config_p = NULL;
-struct storage_p *storage_ps = NULL;
+struct config_p *config_p;
 
 int main(int argc, char *argv[]) {
 	int c;

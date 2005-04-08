@@ -103,6 +103,13 @@ static int _nv_pth_status;
 #define NAME_LEN 256
 
 /*
+ * Copy a string of length NAME_LEN safely.
+ */
+#define name_copy(d, s) \
+	strncpy((d), (s), NAME_LEN); \
+	d[NAME_LEN-1] = '\0'
+
+/*
  * Logging templates
  */
 #define LOG_DEBUG_MSG		"[debug|%%s:%%d]: %s\n"

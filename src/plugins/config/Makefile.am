@@ -9,4 +9,4 @@ AM_YFLAGS = -d
 #AM_LFLAGS = -d
 config_LTLIBRARIES = file.la
 file_la_SOURCES = file.c file_lexer.l file_parser.y file_parser.h
-file_la_LDFLAGS = -module
+file_la_LDFLAGS = -module -lefence

@@ -35,8 +35,7 @@ nv_list(nv_proto_p_list);
 nv_list(nv_auth_p_list);
 nv_list(nv_stor_list);
 nv_list(nv_sens_list);
-nv_list(nv_proto_list);
-nv_list(nv_auth_list);
+nv_list(nv_sys_list);
 
 int nv_config_init(char *plugin) {
 	int ret = 0;

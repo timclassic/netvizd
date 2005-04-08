@@ -28,15 +28,21 @@ int yydebug = 0;
 void push_generic();
 void pop_generic();
 
-static struct global_plugin g_plugin;
-static struct global_storage g_storage;
-static struct global_sensor g_sensor;
+static struct global_plugin *g_plugin;
+static struct global_storage *g_storage;
+static struct global_sensor *g_sensor;
 static nv_list *g_values = NULL;
-static struct data_set d_set;
-static struct system sys;
+static struct data_set *d_set;
+static struct system *sys;
 
 void add_value(char *word, char *value);
 void clear_values();
+
+#define new_plugin		g_plugin = nv_calloc(struct global_plugin, 1)
+#define new_storage		g_storage = nv_calloc(struct global_storage, 1)
+#define new_sensor		g_sensor = nv_calloc(struct global_sensor, 1)
+#define new_data_set	d_set = nv_calloc(struct data_set, 1)
+#define new_system		sys = nv_calloc(struct system, 1)
 %}
 
 %union {
@@ -70,13 +76,15 @@ top_item		: global_block SEMI
 
 global_block	: GLOBAL LBRACE global_list RBRACE
 
-system_block	: SYSTEM STRING { sys.name = $2; } LBRACE system_list RBRACE
-				{	add_system(&sys); }
+system_block	: SYSTEM STRING { sys->name = $2; } LBRACE system_list RBRACE
+				{	add_system(sys);
+					new_system; }
 
 data_block		: DATA_SET STRING LBRACE data_list RBRACE
-				{	d_set.name = $2;
-					d_set.s_name = sys.name;
-					add_data_set(&d_set); }
+				{	d_set->name = $2;
+					d_set->s_name = strdup(sys->name);
+					add_data_set(d_set);
+					new_data_set; }
 
 global_list		: global_list2
 			 	| { }
@@ -109,37 +117,40 @@ system_item		: data_block SEMI
 				| s_desc_stmt SEMI
 
 plugin_block	: PLUGIN STRING LBRACE plugin_list RBRACE
-				{	g_plugin.name = $2;
-					add_plugin(&g_plugin); }
+				{	g_plugin->name = $2;
+					add_plugin(g_plugin);
+					new_plugin; }
 
 storage_block	: STORAGE STRING TYPE STRING LBRACE { push_generic(); }
 				  generic_list
-				{	g_storage.name = $2;
-					g_storage.p_name = $4;
-					g_storage.values = g_values;
-					add_storage(&g_storage);
+				{	g_storage->name = $2;
+					g_storage->p_name = $4;
+					g_storage->values = g_values;
+					add_storage(g_storage);
+					new_storage;
 					clear_values(); }
 
 sensor_block	: SENSOR STRING TYPE STRING LBRACE { push_generic(); }
 				  generic_list
-				{	g_sensor.name = $2;
-					g_sensor.p_name = $4;
-					g_sensor.values = g_values;
-					add_sensor(&g_sensor);
+				{	g_sensor->name = $2;
+					g_sensor->p_name = $4;
+					g_sensor->values = g_values;
+					add_sensor(g_sensor);
+					new_sensor;
 					clear_values(); }
 
-dtype_stmt		: TYPE COUNTER		{ d_set.type = ds_type_counter; }
-				| TYPE DERIVE		{ d_set.type = ds_type_derive; }
-				| TYPE ABSOLUTE		{ d_set.type = ds_type_absolute; }
-				| TYPE GAUGE		{ d_set.type = ds_type_gauge; }
+dtype_stmt		: TYPE COUNTER		{ d_set->type = ds_type_counter; }
+				| TYPE DERIVE		{ d_set->type = ds_type_derive; }
+				| TYPE ABSOLUTE		{ d_set->type = ds_type_absolute; }
+				| TYPE GAUGE		{ d_set->type = ds_type_gauge; }
 
-d_desc_stmt		: DESC STRING		{ d_set.desc = $2; }
+d_desc_stmt		: DESC STRING		{ d_set->desc = $2; }
 
-sensor_stmt		: SENSOR STRING		{ d_set.sensor = $2; }
+sensor_stmt		: SENSOR STRING		{ d_set->sensor = $2; }
 
-storage_stmt	: STORAGE STRING	{ d_set.storage = $2; }
+storage_stmt	: STORAGE STRING	{ d_set->storage = $2; }
 
-s_desc_stmt		: DESC STRING		{ sys.desc = $2; }
+s_desc_stmt		: DESC STRING		{ sys->desc = $2; }
 
 plugin_list		: plugin_list2
 			 	| { }
@@ -150,12 +161,12 @@ plugin_list2	: plugin_list2 plugin_item
 plugin_item		: ptype_stmt SEMI
 			 	| file_stmt SEMI
 
-ptype_stmt		: TYPE STORAGE	{ g_plugin.type = p_type_storage; }
-				| TYPE SENSOR	{ g_plugin.type = p_type_sensor; }
-				| TYPE PROTO	{ g_plugin.type = p_type_proto; }
-				| TYPE AUTH		{ g_plugin.type = p_type_auth; }
+ptype_stmt		: TYPE STORAGE	{ g_plugin->type = p_type_storage; }
+				| TYPE SENSOR	{ g_plugin->type = p_type_sensor; }
+				| TYPE PROTO	{ g_plugin->type = p_type_proto; }
+				| TYPE AUTH		{ g_plugin->type = p_type_auth; }
 
-file_stmt		: FILEE STRING	{ g_plugin.file = $2; }
+file_stmt		: FILEE STRING	{ g_plugin->file = $2; }
 
 generic_list	: generic_list2
 			 	| { }
@@ -172,12 +183,37 @@ generic_item2 	: STRING
 
 %%
 
+
+/*
+ * begin_parse() and end_parse() initialize and clean up structures used
+ * during the parsing process. */
+int begin_parse() {
+	int stat = 0;
+
+	/* allocate initial structures */
+	new_plugin;
+	new_storage;
+	new_sensor;
+	new_data_set;
+	new_system;
+
+	/* start the parser */
+	stat = yyparse();
+
+	/* clean up left-over structures and leave */
+	nv_free(g_plugin);
+	nv_free(g_storage);
+	nv_free(g_sensor);
+	nv_free(d_set);
+	nv_free(sys);
+	return stat;
+}
+
 /*
  * The following functions manage the dynamic value linked list.
  * It stores the word/value pairs for the custom plugin
  * configurations.
  */
-
 void add_value(char *word, char *value) {
 	nv_node n;
 	struct values *v = NULL;

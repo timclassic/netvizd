@@ -41,7 +41,6 @@
 #define PROTO_INIT			"proto_init"
 
 extern struct config_p *config_p;
-extern struct storage_p *storage_ps;
 
 int nv_plugins_init() {
 	int ret = 0;

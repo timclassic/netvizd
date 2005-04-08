@@ -92,13 +92,17 @@ static inline void list_append(nv_list *l, nv_node n) {
 	else list_insert(l->prev, n);
 };
 
-/* Remove an node from the list.  We do not need anything but the node.
+/* Remove a node from the list.  We do not need anything but the node.
  * The programmer is responsible for freeing the data inside the node. */
 static inline void list_del(nv_node n) {
 	if (n == NULL) return;
 	if (n->data == NULL) return;
 	n->prev->next = n->next;
 	n->next->prev = n->prev;
+	if (n->prev->data == NULL && n->next->data == NULL) {
+		n->next->next = NULL;
+		n->next->prev = NULL;
+	}
 	nv_free(n);
 }
 

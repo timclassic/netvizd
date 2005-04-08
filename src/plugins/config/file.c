@@ -18,18 +18,6 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
-// SAMPLE LOOP CODE - USE LATER
-//	/* find the plugin for this instance */
-//	stat = -1;
-//	list_for_each(n, &nv_stor_p_list) {
-//		struct nv_stor_p *p;
-//		p = node_data(struct nv_stor_p, n);
-//		if (strncmp(p->name, s->p_name, NAME_LEN) == 0) {
-//			stor->plug = p;
-//			stat = 0;
-//			nv_log(LOG_DEBUG, "Found the correct storage plugin");
-//		}
-//	}
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -73,7 +61,7 @@ int config_init(struct config_p *p) {
 	/* read in our config file */
 	cfile = fopen("/home/tim/cs3901/netvizd/netvizd.conf", "r");
 	yyin = cfile;
-	ret = yyparse();
+	ret = begin_parse();
 	if (ret != 0) {
 		nv_log(LOG_ERROR, "configuration file parse failed, aborting");
 		stat = -1;
@@ -214,10 +202,316 @@ void add_system(struct system *s) {
  * everything looks OK here, validate_conf() in the main app will verify
  * that we have enough things defined to actually run.  We also have to
  * free the memory allocated by the parser.
+ *
+ * 'f' is the struct from the file
+ * 'c' is the struct from the internal config
  */
 int create_conf() {
+	nv_node i = NULL;
+	nv_node t = NULL;
+	int stat = 0;
 
+	/*
+	 * loop over the plugins
+	 */
+	/* create the real config structures */
+	list_for_each(i, &file_plug_list) {
+		nv_node n;
+		struct nv_stor_p *stor;
+		struct nv_sens_p *sens;
+		struct nv_proto_p *proto;
+		struct nv_auth_p *auth;
+		struct global_plugin *f;
 
+		f = node_data(struct global_plugin, i);
+
+		switch (f->type) {
+			case p_type_storage:
+				stor = nv_calloc(struct nv_stor_p, 1);
+				name_copy(stor->name, f->name);
+				name_copy(stor->file, f->file);
+				nv_node_new(n);
+				set_node_data(n, stor);
+				list_append(&nv_stor_p_list, n);
+				break;
+
+			case p_type_sensor:
+				sens = nv_calloc(struct nv_sens_p, 1);
+				name_copy(sens->name, f->name);
+				name_copy(sens->file, f->file);
+				nv_node_new(n);
+				set_node_data(n, sens);
+				list_append(&nv_sens_p_list, n);
+				break;
+
+			case p_type_proto:
+				proto = nv_calloc(struct nv_proto_p, 1);
+				name_copy(proto->name, f->name);
+				name_copy(proto->file, f->file);
+				nv_node_new(n);
+				set_node_data(n, proto);
+				list_append(&nv_proto_p_list, n);
+				break;
+
+			case p_type_auth:
+				auth = nv_calloc(struct nv_auth_p, 1);
+				name_copy(auth->name, f->name);
+				name_copy(auth->file, f->file);
+				nv_node_new(n);
+				set_node_data(n, auth);
+				list_append(&nv_auth_p_list, n);
+				break;
+		}
+	}
+
+	/*
+	 * loop over storage instances
+	 */
+	/* match each instance with its storage plugin */
+	list_for_each(i, &file_stor_list) {
+		int err = 0;
+		nv_node j;
+		nv_node n;
+		struct nv_stor *stor = NULL;
+		nv_list *conf = NULL;
+		struct global_storage *f = node_data(struct global_storage, i);
+
+		stor = nv_calloc(struct nv_stor, 1);
+		name_copy(stor->name, f->name);
+
+		/* copy the config values over */
+		nv_list_new(conf);
+		list_for_each(j, f->values) {
+			struct values *fv;
+			nv_node nv;
+			struct nv_conf *cv;
+
+			/* copy the values to the new struct */
+			fv = node_data(struct values, j);
+			cv = nv_calloc(struct nv_conf, 1);
+			name_copy(cv->key, fv->word);
+			name_copy(cv->value, fv->value);
+			
+			/* add to list */
+			nv_node_new(nv);
+			set_node_data(nv, cv);
+			list_append(conf, nv);
+		}
+		stor->conf = conf;
+		
+		/* try to find the name used for the plugin */
+		err = -1;
+		list_for_each(j, &nv_stor_p_list) {
+			struct nv_stor_p *c = node_data(struct nv_stor_p, j);
+			
+			if (strncmp(f->p_name, c->name, NAME_LEN) == 0) {
+				stor->plug = c;
+				err = 0;
+			}
+		}
+		if (err != 0) {
+			nv_log(LOG_ERROR, "no storage plugin definition found with "
+				   "name %s", f->p_name);
+			stat = -1;
+		}
+
+		/* add storage to list */
+		nv_node_new(n);
+		set_node_data(n, stor);
+		list_append(&nv_stor_list, n);
+	}
+
+	/*
+	 * loop over sensor instances
+	 */
+	list_for_each(i, &file_sens_list) {
+		int err = 0;
+		nv_node j;
+		nv_node n;
+		struct nv_sens *sens = NULL;
+		nv_list *conf = NULL;
+		struct global_sensor *f = node_data(struct global_sensor, i);
+
+		sens = nv_calloc(struct nv_sens, 1);
+		name_copy(sens->name, f->name);
+
+		/* copy the config values over */
+		nv_list_new(conf);
+		list_for_each(j, f->values) {
+			struct values *fv;
+			nv_node nv;
+			struct nv_conf *cv;
+
+			/* copy the values to the new struct */
+			fv = node_data(struct values, j);
+			cv = nv_calloc(struct nv_conf, 1);
+			name_copy(cv->key, fv->word);
+			name_copy(cv->value, fv->value);
+			
+			/* add to list */
+			nv_node_new(nv);
+			set_node_data(nv, cv);
+			list_append(conf, nv);
+		}
+		sens->conf = conf;
+		
+		/* try to find the name used for the plugin */
+		err = -1;
+		list_for_each(j, &nv_sens_p_list) {
+			struct nv_sens_p *c = node_data(struct nv_sens_p, j);
+			
+			if (strncmp(f->p_name, c->name, NAME_LEN) == 0) {
+				sens->plug = c;
+				err = 0;
+			}
+		}
+		if (err != 0) {
+			nv_log(LOG_ERROR, "no sensor plugin definition found with "
+				   "name %s", f->p_name);
+			stat = -1;
+		}
+
+		/* add sensor to list */
+		nv_node_new(n);
+		set_node_data(n, sens);
+		list_append(&nv_sens_list, n);
+	}
+
+	/*
+	 * loop over systems
+	 */
+	list_for_each(i, &file_sys_list) {
+		nv_node n;
+		struct system *f = node_data(struct system, i);
+		struct nv_sys *sys = NULL;
+
+		sys = nv_calloc(struct nv_sys, 1);
+		name_copy(sys->name, f->name);
+		name_copy(sys->desc, f->desc);
+		
+		/* add system to list */
+		nv_node_new(n);
+		set_node_data(n, sys);
+		list_append(&nv_sys_list, n);
+	}
+
+	/*
+	 * loop over data sets
+	 */
+	list_for_each(i, &file_dset_list) {
+		nv_node n;
+		struct data_set *f = node_data(struct data_set, i);
+
+		/* TODO Write data set config code */
+	}
+
+cleanup:
+	/* free up the plugin definitions */
+	t = NULL;
+	list_for_each(i, &file_plug_list) {
+		struct global_plugin *f;
+
+		/* free this file config */
+		f = node_data(struct global_plugin, i);
+		nv_free(f->name);
+		nv_free(f->file);
+		nv_free(f);
+
+		if (t != NULL) list_del(i->prev);
+		t = i;
+	}
+	list_del(t);
+
+	/* free up storage instance definitions */
+	t = NULL;
+	list_for_each(i, &file_stor_list) {
+		nv_node j = NULL;
+		nv_node t2 = NULL;
+		struct global_storage *f;
+
+		/* free this storage config */
+		f = node_data(struct global_storage, i);
+		nv_free(f->name);
+		nv_free(f->p_name);
+
+		t2 = NULL;
+		list_for_each(j, f->values) {
+			if (t2 != NULL) list_del(j->prev);
+			t2 = j;
+		}
+		list_del(t2);
+
+		nv_free(f->values);
+		nv_free(f);
+
+		if (t != NULL) list_del(i->prev);
+		t = i;
+	}
+	list_del(t);
+
+	/* free up sensor instance definitions */
+	t = NULL;
+	list_for_each(i, &file_sens_list) {
+		nv_node j = NULL;
+		nv_node t2 = NULL;
+		struct global_sensor *f;
+
+		/* free this sensor config */
+		f = node_data(struct global_sensor, i);
+		nv_free(f->name);
+		nv_free(f->p_name);
+
+		t2 = NULL;
+		list_for_each(j, f->values) {
+			if (t2 != NULL) list_del(j->prev);
+			t2 = j;
+		}
+		list_del(t2);
+
+		nv_free(f->values);
+		nv_free(f);
+
+		if (t != NULL) list_del(i->prev);
+		t = i;
+	}
+	list_del(t);
+
+	/* free up the system definitions */
+	t = NULL;
+	list_for_each(i, &file_sys_list) {
+		struct system *f;
+
+		/* free this file config */
+		f = node_data(struct system, i);
+		nv_free(f->name);
+		nv_free(f->desc);
+		nv_free(f);
+
+		if (t != NULL) list_del(i->prev);
+		t = i;
+	}
+	list_del(t);
+
+	/* free up the data set definitions */
+	t = NULL;
+	list_for_each(i, &file_dset_list) {
+		struct data_set *f;
+
+		/* free this file config */
+		f = node_data(struct data_set, i);
+		nv_free(f->name);
+		nv_free(f->s_name);
+		nv_free(f->desc);
+		nv_free(f->sensor);
+		nv_free(f->storage);
+		nv_free(f);
+
+		if (t != NULL) list_del(i->prev);
+		t = i;
+	}
+	list_del(t);
+
+	return stat;
 }
 
 /* vim: set ts=4 sw=4: */
