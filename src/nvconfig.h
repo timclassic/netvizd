@@ -24,6 +24,14 @@
 #include <netvizd.h>
 #include <nvlist.h>
 
+/* a loaded config plugin */
+struct nv_config_p {
+	char				file[NAME_LEN];
+
+	int					(*reload)(struct nv_config_p *p);
+	int					(*free)(struct nv_config_p *p);
+};
+
 /* a loaded storage plugin */
 struct nv_stor_p {
 	char 				name[NAME_LEN];
@@ -84,27 +92,17 @@ struct nv_ds_counter {
 	struct nv_sys *		sys;
 };
 
-/* a derive-based data set definition */
-struct nv_ds_derive {
-	char				name[NAME_LEN];
-	char				desc[NAME_LEN];
-	struct nv_sens *	sens;
-	struct nv_stor *	stor;
-	struct nv_sys *		sys;
+/* time series-based data sets */
+enum nv_ds_type {
+	ds_type_none = 0,
+	ds_type_counter,
+	ds_type_derive,
+	ds_type_absolute,
+	ds_type_gauge
 };
-
-/* a absolute-based data set definition */
-struct nv_ds_absolute {
+struct nv_dsts {
 	char				name[NAME_LEN];
-	char				desc[NAME_LEN];
-	struct nv_sens *	sens;
-	struct nv_stor *	stor;
-	struct nv_sys *		sys;
-};
-
-/* a gauge-based data set definition */
-struct nv_ds_gauge {
-	char				name[NAME_LEN];
+	enum nv_ds_type		type;
 	char				desc[NAME_LEN];
 	struct nv_sens *	sens;
 	struct nv_stor *	stor;
@@ -112,6 +110,7 @@ struct nv_ds_gauge {
 };
 
 #ifndef NV_GLOBAL_CONFIG
+extern struct nv_config_p *nv_config_p;
 extern nv_list nv_stor_p_list;
 extern nv_list nv_sens_p_list;
 extern nv_list nv_proto_p_list;
@@ -119,6 +118,7 @@ extern nv_list nv_auth_p_list;
 extern nv_list nv_stor_list;
 extern nv_list nv_sens_list;
 extern nv_list nv_sys_list;
+extern nv_list nv_dsts_list;
 #endif /* NV_GLOBAL_CONFIG */
 
 #endif

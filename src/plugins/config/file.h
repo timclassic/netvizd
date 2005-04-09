@@ -31,6 +31,7 @@
  */
 
 enum p_type {
+	p_type_none = 0,
 	p_type_storage,
 	p_type_sensor,
 	p_type_proto,
@@ -60,20 +61,13 @@ struct global_sensor {
 	nv_list *		values;
 };
 
-enum ds_type {
-	ds_type_counter,
-	ds_type_derive,
-	ds_type_absolute,
-	ds_type_gauge
-};
-
 struct data_set {
 	char *			name;
-	char *			s_name;
 	char *			desc;
-	enum ds_type	type;
+	enum nv_ds_type	type;
 	char *			sensor;
 	char *			storage;
+	char *			system;
 };
 
 struct system {

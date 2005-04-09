@@ -82,7 +82,7 @@ system_block	: SYSTEM STRING { sys->name = $2; } LBRACE system_list RBRACE
 
 data_block		: DATA_SET STRING LBRACE data_list RBRACE
 				{	d_set->name = $2;
-					d_set->s_name = strdup(sys->name);
+					d_set->system = strdup(sys->name);
 					add_data_set(d_set);
 					new_data_set; }
 

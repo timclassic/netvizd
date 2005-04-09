@@ -139,7 +139,7 @@ void _nv_log(log_type_t type, char *message, ...) {
 	va_start(argv, message);
 	switch (type) {
 	case LOG_DEBUG:
-		snprintf(buf, len, LOG_DEBUG_MSG, message);
+		if (debug_mode) snprintf(buf, len, LOG_DEBUG_MSG, message);
 		break;
 		
 	case LOG_INFO:

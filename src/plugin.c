@@ -23,6 +23,7 @@
 #endif
 
 #include <netvizd.h>
+#include <nvconfig.h>
 #include <plugin.h>
 #include <ltdl.h>
 #include <sys/stat.h>
@@ -39,8 +40,6 @@
 #define STORAGE_INIT		"storage_init"
 #define SENSOR_INIT			"sensor_init"
 #define PROTO_INIT			"proto_init"
-
-extern struct config_p *config_p;
 
 int nv_plugins_init() {
 	int ret = 0;
@@ -74,7 +73,7 @@ int config_p_init(char *file) {
 	char *buf = NULL;
 	int len = 0;
 	lt_dlhandle module = NULL;
-	int (*config_init)(struct config_p *);
+	int (*config_init)(struct nv_config_p *);
 	int stat = 0;
 	int ret = 0;
 
@@ -91,8 +90,8 @@ int config_p_init(char *file) {
 	}
 
 	/* allocate memory for config plugin struct if necessary */
-	if (config_p == NULL) {
-		config_p = nv_calloc(struct config_p, 1);
+	if (nv_config_p == NULL) {
+		nv_config_p = nv_calloc(struct nv_config_p, 1);
 	}
 
 	/* get reference to init function and run it */
@@ -102,7 +101,7 @@ int config_p_init(char *file) {
 		stat = -1;
 		goto error1;
 	}
-	ret = config_init(config_p);
+	ret = config_init(nv_config_p);
 
 	/*
 	 * Cleanup Code
@@ -110,7 +109,7 @@ int config_p_init(char *file) {
 	goto cleanup;
 
 error1:
-	nv_free(config_p);
+	nv_free(nv_config_p);
 
 cleanup:
 	nv_free(buf);

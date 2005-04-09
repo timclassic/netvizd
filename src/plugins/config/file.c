@@ -29,13 +29,11 @@
 #include <nvlist.h>
 #include "file.h"
 
-#define PLUGIN_NAME		"file"
-
 #define config_init		file_LTX_config_init
 
-int config_init(struct config_p *p);
-static int file_reload(struct config_p *p);
-static int file_free(struct config_p *p);
+int config_init(struct nv_config_p *p);
+static int file_reload(struct nv_config_p *p);
+static int file_free(struct nv_config_p *p);
 static int create_conf();
 
 int yylex();
@@ -47,14 +45,12 @@ static nv_list(file_sens_list);
 static nv_list(file_dset_list);
 static nv_list(file_sys_list);
 
-int config_init(struct config_p *p) {
+int config_init(struct nv_config_p *p) {
 	FILE *cfile = NULL;
 	int ret = 0;
 	int stat = 0;
 	
 	/* fill in config_p structure */
-	strncpy(p->name, PLUGIN_NAME, NAME_LEN);
-	p->name[NAME_LEN-1] = '\0';
 	p->reload = file_reload;
 	p->free = file_free;
 
@@ -83,11 +79,11 @@ cleanup:
 	return stat;
 }
 
-int file_reload(struct config_p *p) {
+int file_reload(struct nv_config_p *p) {
 	return 0;
 }
 
-int file_free(struct config_p *p) {
+int file_free(struct nv_config_p *p) {
 	return 0;
 }
 
@@ -102,7 +98,6 @@ void add_plugin(struct global_plugin *p) {
 	nv_log(LOG_DEBUG, "    name: %s", p->name);
 	nv_log(LOG_DEBUG, "    type: %i", p->type);
 	nv_log(LOG_DEBUG, "    file: %s", p->file);
-
 	nv_node_new(n);
 	set_node_data(n, p);
 	list_append(&file_plug_list, n);
@@ -148,7 +143,6 @@ void add_sensor(struct global_sensor *s) {
 		v = node_data(struct values, i);
 		nv_log(LOG_DEBUG, "        %s, %s", v->word, v->value);
 	}
-
 	nv_node_new(n);
 	set_node_data(n, s);
 	list_append(&file_sens_list, n);
@@ -166,12 +160,11 @@ void add_data_set(struct data_set *d) {
 
 	nv_log(LOG_DEBUG, "Adding data set to internal list:");
 	nv_log(LOG_DEBUG, "    name: %s", d->name);
-	nv_log(LOG_DEBUG, "    system: %s", d->s_name);
 	nv_log(LOG_DEBUG, "    description: %s", d->desc);
 	nv_log(LOG_DEBUG, "    type: %i", d->type);
 	nv_log(LOG_DEBUG, "    sensor: %s", d->sensor);
 	nv_log(LOG_DEBUG, "    storage: %s", d->storage);
-
+	nv_log(LOG_DEBUG, "    system: %s", d->system);
 	nv_node_new(n);
 	set_node_data(n, d);
 	list_append(&file_dset_list, n);
@@ -188,7 +181,6 @@ void add_system(struct system *s) {
 	nv_log(LOG_DEBUG, "Adding system to internal list:");
 	nv_log(LOG_DEBUG, "    name: %s", s->name);
 	nv_log(LOG_DEBUG, "    description: %s", s->desc);
-
 	nv_node_new(n);
 	set_node_data(n, s);
 	list_append(&file_sys_list, n);
@@ -199,7 +191,7 @@ void add_system(struct system *s) {
  * configuration as defined in nvconfig.h.  We throw errors for things
  * like names that don't match within the config file or other obvious
  * things that are specific to this type of configuration plugin.  If
- * everything looks OK here, validate_conf() in the main app will verify
+ * everything looks OK here, nv_validate_conf() in the main app will verify
  * that we have enough things defined to actually run.  We also have to
  * free the memory allocated by the parser.
  *
@@ -224,12 +216,22 @@ int create_conf() {
 		struct global_plugin *f;
 
 		f = node_data(struct global_plugin, i);
-
+		
+		if (f->file == NULL) {
+			nv_log(LOG_ERROR, "file not specified for plugin %s", f->name);
+			stat = -1;
+		}
 		switch (f->type) {
+			case p_type_none:
+				nv_log(LOG_ERROR, "type not specified for plugin %s",
+					   f->name);
+				stat = -1;
+				break;
+
 			case p_type_storage:
 				stor = nv_calloc(struct nv_stor_p, 1);
 				name_copy(stor->name, f->name);
-				name_copy(stor->file, f->file);
+				if (f->file) name_copy(stor->file, f->file);
 				nv_node_new(n);
 				set_node_data(n, stor);
 				list_append(&nv_stor_p_list, n);
@@ -238,7 +240,7 @@ int create_conf() {
 			case p_type_sensor:
 				sens = nv_calloc(struct nv_sens_p, 1);
 				name_copy(sens->name, f->name);
-				name_copy(sens->file, f->file);
+				if (f->file) name_copy(sens->file, f->file);
 				nv_node_new(n);
 				set_node_data(n, sens);
 				list_append(&nv_sens_p_list, n);
@@ -247,7 +249,7 @@ int create_conf() {
 			case p_type_proto:
 				proto = nv_calloc(struct nv_proto_p, 1);
 				name_copy(proto->name, f->name);
-				name_copy(proto->file, f->file);
+				if (f->file) name_copy(proto->file, f->file);
 				nv_node_new(n);
 				set_node_data(n, proto);
 				list_append(&nv_proto_p_list, n);
@@ -256,7 +258,7 @@ int create_conf() {
 			case p_type_auth:
 				auth = nv_calloc(struct nv_auth_p, 1);
 				name_copy(auth->name, f->name);
-				name_copy(auth->file, f->file);
+				if (f->file) name_copy(auth->file, f->file);
 				nv_node_new(n);
 				set_node_data(n, auth);
 				list_append(&nv_auth_p_list, n);
@@ -399,10 +401,82 @@ int create_conf() {
 	 * loop over data sets
 	 */
 	list_for_each(i, &file_dset_list) {
+		int err = 0;
 		nv_node n;
+		nv_node j;
+		struct nv_dsts *ds = NULL;
 		struct data_set *f = node_data(struct data_set, i);
 
-		/* TODO Write data set config code */
+		ds = nv_calloc(struct nv_dsts, 1);
+		name_copy(ds->name, f->name);
+		name_copy(ds->desc, f->desc);
+		ds->type = f->type;
+		if (ds->type == ds_type_none) {
+			nv_log(LOG_ERROR, "type not specified for data set %s",
+				   ds->name);
+			stat = -1;
+		}
+
+		/* try to find the name used for the sensor instance */
+		if (f->sensor != NULL) {
+			err = -1;
+			list_for_each(j, &nv_sens_list) {
+				struct nv_sens *c = node_data(struct nv_sens, j);
+				
+				if (strncmp(f->sensor, c->name, NAME_LEN) == 0) {
+					ds->sens = c;
+					err = 0;
+				}
+			}
+			if (err != 0) {
+				nv_log(LOG_ERROR, "no sensor instance definition found with "
+					   "name %s", f->sensor);
+				stat = -1;
+			}
+		}
+
+		/* try to find the name used for the storage instance */
+		if (f->storage != NULL) {
+			err = -1;
+			list_for_each(j, &nv_stor_list) {
+				struct nv_stor *c = node_data(struct nv_stor, j);
+				
+				if (strncmp(f->storage, c->name, NAME_LEN) == 0) {
+					ds->stor = c;
+					err = 0;
+				}
+			}
+			if (err != 0) {
+				nv_log(LOG_ERROR, "no storage instance definition found with "
+					   "name %s", f->storage);
+				stat = -1;
+			}
+		} else {
+			nv_log(LOG_ERROR, "no storage instance specified for data set %s",
+				   ds->name);
+			stat = -1;
+		}
+
+		/* try to find the name used for the system */
+		err = -1;
+		list_for_each(j, &nv_sys_list) {
+			struct nv_sys *c = node_data(struct nv_sys, j);
+			
+			if (strncmp(f->system, c->name, NAME_LEN) == 0) {
+				ds->sys = c;
+				err = 0;
+			}
+		}
+		if (err != 0) {
+			nv_log(LOG_ERROR, "internal parsing error, no system found with "
+				   "name %s", f->system);
+			stat = -1;
+		}
+		
+		/* add data set to list */
+		nv_node_new(n);
+		set_node_data(n, ds);
+		list_append(&nv_dsts_list, n);
 	}
 
 cleanup:
@@ -500,10 +574,10 @@ cleanup:
 		/* free this file config */
 		f = node_data(struct data_set, i);
 		nv_free(f->name);
-		nv_free(f->s_name);
 		nv_free(f->desc);
 		nv_free(f->sensor);
 		nv_free(f->storage);
+		nv_free(f->system);
 		nv_free(f);
 
 		if (t != NULL) list_del(i->prev);
