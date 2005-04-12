@@ -80,6 +80,7 @@ description		{ return DESC; }
 
 <generic>{ws}	{ }
 <generic>\n		{ lineno++; }
+<generic>#.*	{ }
 <generic>yes	{ yylval.ch = strdup(yytext); return YES; }
 <generic>no		{ yylval.ch = strdup(yytext); return NO; }
 <generic>;		{ return SEMI; }

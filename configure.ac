@@ -38,6 +38,20 @@ AC_FUNC_STRERROR_R
 AC_FUNC_VPRINTF
 AC_CHECK_FUNCS([bzero strerror])
 
+# Check for pthreads
+ACX_PTHREAD([],[
+	echo "*** I cannot figure out how to use POSIX threads on your system."
+	echo "*** Please make sure the correct libraries are installed."
+	exit 1
+])
+CC="$PTHREAD_CC"
+CFLAGS="$CFLAGS $PTHREAD_CFLAGS"
+LIBS="$LIBS $PTHREAD_LIBS"
+
+# Figure out how to use sockets
+ETR_SOCKET_NSL
+LIBS="$LIBS $ETR_SOCKET_LIBS"
+
 # Set up ltdl and libtool
 AC_LIBLTDL_CONVENIENCE
 AC_SUBST([LTDLINCL])
@@ -47,7 +61,12 @@ AM_PROG_LIBTOOL
 AC_CONFIG_SUBDIRS([libltdl])
 
 AC_CONFIG_FILES([Makefile
-                 src/Makefile
-                 src/plugins/Makefile
-                 src/plugins/config/Makefile])
+				 src/Makefile
+				 src/plugins/Makefile
+				 src/plugins/config/Makefile
+				 src/plugins/storage/Makefile
+				 src/plugins/sensor/Makefile
+				 src/plugins/proto/Makefile
+				 src/plugins/auth/Makefile])
+
 AC_OUTPUT

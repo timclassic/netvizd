@@ -85,28 +85,25 @@ int nv_validate_conf() {
 
 	/* check for a protocol plugin */
 	if (nv_proto_p_list.next == NULL) {
-		nv_log(LOG_ERROR, "need at least one protocol plugin defined, "
-			   "aborting");
+		nv_log(LOG_ERROR, "need at least one protocol plugin defined");
 		stat = -1;
 	}
 
 	/* check for an auth plugin */
 	if (nv_auth_p_list.next == NULL) {
-		nv_log(LOG_ERROR, "need at least one authentication plugin defined, "
-			   "aborting");
+		nv_log(LOG_ERROR, "need at least one authentication plugin defined");
 		stat = -1;
 	}
 
 	/* check for a storage instance */
 	if (nv_stor_list.next == NULL) {
-		nv_log(LOG_ERROR, "need at least one storage instance defined, "
-			   "aborting");
+		nv_log(LOG_ERROR, "need at least one storage instance defined");
 		stat = -1;
 	}
 
 	/* check for a data set */
 	if (nv_dsts_list.next == NULL) {
-		nv_log(LOG_ERROR, "need at least one data set defined, aborting");
+		nv_log(LOG_ERROR, "need at least one data set defined");
 		stat = -1;
 	}
 

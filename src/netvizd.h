@@ -70,13 +70,13 @@
 _nv_pth_status = pthread_mutex_lock(m); \
 if (_nv_pth_status != 0) { \
 	nv_log(LOG_ERROR, "pthread_mutex_lock()", _nv_pth_status); \
-	exit(PTHREAD_EXIT);\
+	exit(PTHREAD_EXIT); \
 }
 #define nv_unlock(m) \
 _nv_pth_status = pthread_mutex_unlock(m); \
 if (_nv_pth_status != 0) { \
 	nv_log(LOG_ERROR, "pthread_mutex_unlock()", _nv_pth_status); \
-	exit(PTHREAD_EXIT);\
+	exit(PTHREAD_EXIT); \
 }
 #define nv_wait(c, m) \
 _nv_pth_status = pthread_cond_wait(c, m); \

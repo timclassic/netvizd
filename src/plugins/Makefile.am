@@ -2,4 +2,4 @@ INCLUDES = $(all_includes)
 METASOURCES = AUTO
 
 
-SUBDIRS = config
+SUBDIRS = config storage sensor proto auth

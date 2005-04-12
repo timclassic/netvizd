@@ -24,37 +24,6 @@
 #include <netvizd.h>
 #include <nvlist.h>
 
-/* a loaded config plugin */
-struct nv_config_p {
-	char				file[NAME_LEN];
-
-	int					(*reload)(struct nv_config_p *p);
-	int					(*free)(struct nv_config_p *p);
-};
-
-/* a loaded storage plugin */
-struct nv_stor_p {
-	char 				name[NAME_LEN];
-	char				file[NAME_LEN];
-};
-	
-/* a loaded sensor plugin */
-struct nv_sens_p {
-	char 				name[NAME_LEN];
-	char				file[NAME_LEN];
-};
-
-/* a loaded protocol plugin */
-struct nv_proto_p {
-	char 				name[NAME_LEN];
-	char				file[NAME_LEN];
-};
-
-/* a loaded authentication plugin */
-struct nv_auth_p {
-	char 				name[NAME_LEN];
-	char				file[NAME_LEN];
-};
 
 /* struct for a linked list of the configuration options for a plugin
  * instance */
@@ -68,6 +37,12 @@ struct nv_stor {
 	char				name[NAME_LEN];
 	struct nv_stor_p *	plug;
 	nv_list *			conf;
+	pthread_t *			thread;
+
+	int					beat;
+	int					(*beatfunc)(struct nv_stor *);
+
+	void *				data;
 };
 
 /* an instance of a sensor plugin */
@@ -75,6 +50,12 @@ struct nv_sens {
 	char				name[NAME_LEN];
 	struct nv_sens_p *	plug;
 	nv_list *			conf;
+	pthread_t *			thread;
+
+	int					beat;
+	int					(*beatfunc)(struct nv_sens *);
+
+	void *				data;
 };
 
 /* a system definition */
@@ -108,6 +89,47 @@ struct nv_dsts {
 	struct nv_stor *	stor;
 	struct nv_sys *		sys;
 };
+
+/* a loaded config plugin */
+struct nv_config_p {
+	char				file[NAME_LEN];
+
+	int					(*reload)(struct nv_config_p *);
+	int					(*free)(struct nv_config_p *);
+};
+
+/* a loaded storage plugin */
+struct nv_stor_p {
+	char 				name[NAME_LEN];
+	char				file[NAME_LEN];
+
+	int					(*free)(struct nv_stor_p *);
+	int					(*inst_init)(struct nv_stor *);
+	int					(*inst_free)(struct nv_stor *);
+};
+	
+/* a loaded sensor plugin */
+struct nv_sens_p {
+	char 				name[NAME_LEN];
+	char				file[NAME_LEN];
+
+	int					(*free)(struct nv_sens_p *);
+	int					(*inst_init)(struct nv_sens *);
+	int					(*inst_free)(struct nv_sens *);
+};
+
+/* a loaded protocol plugin */
+struct nv_proto_p {
+	char 				name[NAME_LEN];
+	char				file[NAME_LEN];
+};
+
+/* a loaded authentication plugin */
+struct nv_auth_p {
+	char 				name[NAME_LEN];
+	char				file[NAME_LEN];
+};
+
 
 #ifndef NV_GLOBAL_CONFIG
 extern struct nv_config_p *nv_config_p;

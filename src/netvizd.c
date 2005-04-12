@@ -24,22 +24,28 @@
 
 #include <netvizd.h>
 #include <plugin.h>
+#include <nvconfig.h>
+#include <nvlist.h>
+#include <sensor.h>
+#include <storage.h>
 #include <stdarg.h>
 #include <string.h>
 #include <errno.h>
 #include <getopt.h>
+#include <pthread.h>
 
 /*
  * Global debug_mode
  */
 int debug_mode = 0;
 
-struct config_p *config_p;
-
 int main(int argc, char *argv[]) {
-	int c;
+	int c = 0;
 	int digit_optind = 0;
 	char config_name[NAME_LEN];
+	int stat = EXIT_SUCCESS;
+	nv_node i;
+	pthread_attr_t attr;
 
 	strncpy(config_name, "file.la", NAME_LEN);
 	config_name[NAME_LEN-1] = '\0';
@@ -54,7 +60,7 @@ int main(int argc, char *argv[]) {
 			{0, 0, 0, 0}
 		};
 
-		c = getopt_long(argc, argv, "d", long_options, &option_index);
+		c = getopt_long(argc, argv, "c:d", long_options, &option_index);
 		if (c == -1) break;
 
 		switch (c) {
@@ -77,16 +83,104 @@ int main(int argc, char *argv[]) {
 	};
 
 	nv_log(LOG_INFO, "netvizd " VERSION " coming up");
-	nv_plugins_init();
-
-	nv_config_init(config_name);
-
-
 	
+	/* set up plugin system */
+	if (nv_plugins_init() != 0) {
+		nv_log(LOG_ERROR, "plugin initialization failed, aborting");
+		stat = EXIT_FAILURE;
+		goto cleanup;
+	}
 
+	/* load our configuration from supplied plugin */
+	if (nv_config_init(config_name) != 0) {
+		nv_log(LOG_ERROR, "configuration plugin initialization failed, "
+			   "aborting");
+		stat = EXIT_FAILURE;
+		goto cleanup;
+	}
+
+	/* load the rest of the plugins as per our configuration */
+	if (stor_p_init() != 0) {
+		nv_log(LOG_ERROR, "storage plugin initialization failed, aborting");
+		stat = EXIT_FAILURE;
+		goto cleanup;
+	}
+	if (sens_p_init() != 0) {
+		nv_log(LOG_ERROR, "sensor plugin initialization failed, aborting");
+		stat = EXIT_FAILURE;
+		goto cleanup;
+	}
+	if (proto_p_init() != 0) {
+		nv_log(LOG_ERROR, "protocol plugin initialization failed, aborting");
+		stat = EXIT_FAILURE;
+		goto cleanup;
+	}
+	if (auth_p_init() != 0) {
+		nv_log(LOG_ERROR, "authentication plugin initialization failed, "
+			   "aborting");
+		stat = EXIT_FAILURE;
+		goto cleanup;
+	}
+
+	/* init storage instances */
+	list_for_each(i, &nv_stor_list) {
+		struct nv_stor *s = node_data(struct nv_stor, i);
+		if (s->plug->inst_init == NULL) continue;
+		if (s->plug->inst_init(s) != 0) {
+			nv_log(LOG_ERROR, "storage instance initialization failed, "
+				   "aborting");
+			stat = EXIT_FAILURE;
+			goto cleanup;
+		}
+	}
+
+	/* init sensor instances */
+	list_for_each(i, &nv_sens_list) {
+		struct nv_sens *s = node_data(struct nv_sens, i);
+		if (s->plug->inst_init == NULL) continue;
+		if (s->plug->inst_init(s) != 0) {
+			nv_log(LOG_ERROR, "sensor instance initialization failed, "
+				   "aborting");
+			stat = EXIT_FAILURE;
+			goto cleanup;
+		}
+	}
+
+	/* setup pthreads */
+	pthread_attr_init(&attr);
+	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+	
+	/* start up storage instance threads */
+	list_for_each(i, &nv_stor_list) {
+		int ret = 0;
+		struct nv_stor *s = node_data(struct nv_stor, i);
+		s->thread = nv_calloc(pthread_t, 1);
+		ret = pthread_create(s->thread, &attr, stor_thread, s);
+		if (ret != 0) {
+			nv_perror(LOG_ERROR, "pthread_create()", ret);
+			stat = EXIT_FAILURE;
+			goto cleanup;
+		}
+	}
+
+	/* start up sensor instance threads */
+	list_for_each(i, &nv_sens_list) {
+		int ret = 0;
+		struct nv_sens *s = node_data(struct nv_sens, i);
+		s->thread = nv_calloc(pthread_t, 1);
+		ret = pthread_create(s->thread, &attr, sens_thread, s);
+		if (ret != 0) {
+			nv_perror(LOG_ERROR, "pthread_create()", ret);
+			stat = EXIT_FAILURE;
+			goto cleanup;
+		}
+	}
+
+	/* shut down */
+cleanup:
 	nv_plugins_free();
 	nv_log(LOG_INFO, "netvizd " VERSION " shutdown complete");
-	return EXIT_SUCCESS;
+	return stat;
 }
 
 /*

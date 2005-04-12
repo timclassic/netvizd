@@ -46,7 +46,7 @@ typedef struct _nv_list {
 
 /* Dynamically initialize a new node */
 #define nv_node_new(name) \
-	name = nv_calloc(nv_list, 1);
+	name = nv_calloc(nv_list, 1)
 
 /* Get the actual data of a given type out of a node */
 #define node_data(type, node) \

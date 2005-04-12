@@ -55,11 +55,12 @@ int config_init(struct nv_config_p *p) {
 	p->free = file_free;
 
 	/* read in our config file */
-	cfile = fopen("/home/tim/cs3901/netvizd/netvizd.conf", "r");
+	nv_log(LOG_INFO, "reading config file from " SYSCONFDIR "/netvizd.conf");
+	cfile = fopen(SYSCONFDIR "/netvizd.conf", "r");
 	yyin = cfile;
 	ret = begin_parse();
 	if (ret != 0) {
-		nv_log(LOG_ERROR, "configuration file parse failed, aborting");
+		nv_log(LOG_ERROR, "configuration file parse failed");
 		stat = -1;
 		goto cleanup;
 	}
@@ -70,7 +71,7 @@ int config_init(struct nv_config_p *p) {
 	 * and data sets. */
 	ret = create_conf();
 	if (ret != 0) {
-		nv_log(LOG_ERROR, "configuration failed, aborting");
+		nv_log(LOG_ERROR, "configuration failed");
 		stat = -1;
 		goto cleanup;
 	}

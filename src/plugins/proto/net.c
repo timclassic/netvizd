@@ -18,22 +18,17 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
-#ifndef _PLUGIN_H_
-#define _PLUGIN_H_
-
-#include <netvizd.h>
-
-/*
- * Public interface
- */
-int nv_plugins_init();
-int nv_plugins_free();
-int config_p_init(char *name);
-int stor_p_init();
-int sens_p_init();
-int proto_p_init();
-int auth_p_init();
-
+#ifdef HAVE_CONFIG_H
+#include <config.h>
 #endif
 
-/* vim: set ts=4 sw=4: */
+#include <netvizd.h>
+#include <nvconfig.h>
+
+#define proto_init		net_LTX_proto_init
+
+int proto_init(struct nv_proto_p *p) {
+	int stat = 0;
+
+	return stat;
+}
