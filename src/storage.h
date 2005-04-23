@@ -24,5 +24,9 @@
 #include <netvizd.h>
 
 void *stor_thread(void *arg);
+int stor_submit_ts_data(struct nv_stor *s, struct nv_dsts *d, int time,
+						int value);
 
 #endif
+
+/* vim: set ts=4 sw=4: */

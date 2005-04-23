@@ -36,6 +36,7 @@ struct nv_conf {
 struct nv_stor {
 	char				name[NAME_LEN];
 	struct nv_stor_p *	plug;
+	nv_list *			dsets;
 	nv_list *			conf;
 	pthread_t *			thread;
 
@@ -49,6 +50,7 @@ struct nv_stor {
 struct nv_sens {
 	char				name[NAME_LEN];
 	struct nv_sens_p *	plug;
+	nv_list *			dsets;
 	nv_list *			conf;
 	pthread_t *			thread;
 
@@ -62,15 +64,6 @@ struct nv_sens {
 struct nv_sys {
 	char				name[NAME_LEN];
 	char				desc[NAME_LEN];
-};
-
-/* a counter-based data set definition */
-struct nv_ds_counter {
-	char				name[NAME_LEN];
-	char				desc[NAME_LEN];
-	struct nv_sens *	sens;
-	struct nv_storage *	stor;
-	struct nv_sys *		sys;
 };
 
 /* time series-based data sets */
@@ -106,6 +99,8 @@ struct nv_stor_p {
 	int					(*free)(struct nv_stor_p *);
 	int					(*inst_init)(struct nv_stor *);
 	int					(*inst_free)(struct nv_stor *);
+
+	int					(*stor_ts_data)(char *, char *, int, int);
 };
 	
 /* a loaded sensor plugin */

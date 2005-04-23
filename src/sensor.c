@@ -23,9 +23,63 @@
 #endif
 
 #include <netvizd.h>
+#include <nvconfig.h>
 #include <sensor.h>
+#include <storage.h>
 
+/*
+ * The entry point for a sensor heartbeat thread.  This will only be started
+ * if the sensor instance has indicated that it periodically needs to be
+ * called.  The sensor instance can do anything it wishes here, including
+ * blocking.
+ */
 void *sens_thread(void *arg) {
+	struct nv_sens *s = (struct nv_sens *)arg;
+	time_t last;
+	time_t now;
+	int *stat = NULL;
+
+	nv_log(LOG_INFO, "work thread for sensor instance %s starting", s->name);
+
+	stat = nv_calloc(int, 1);
+
+	last = time(NULL);
+	for (;;) {
+		/* call beatfunc if necessary */
+		if (s->beat > 0 && s->beatfunc != NULL) {
+			now = time(NULL);
+			if (now >= last+s->beat) {
+				last = now;
+				*stat = s->beatfunc(s);
+			}
+			if (*stat != 0) break;
+		}
+
+		/* give up the processor for a bit */
+		usleep(THREAD_SLEEP);
+	}
+
+	nv_log(LOG_INFO, "work thread for sensor instance %s terminating",
+		   s->name);
+	return (void *)stat;
+}
+
+/*
+ * Called by a sensor plugin when it has new time series data to submit.
+ * Here we hand the data off to the storage plugins associated with data
+ * sets concerned with this sensor.
+ */
+int sens_submit_ts_data(struct nv_sens *s, int time, int value) {
+	nv_node n;
+
+	list_for_each(n, s->dsets) {
+		struct nv_dsts *d = node_data(struct nv_dsts, n);
+		stor_submit_ts_data(d->stor, d, time, value);
+	}
 
 	return 0;
 }
+
+
+
+/* vim: set ts=4 sw=4: */

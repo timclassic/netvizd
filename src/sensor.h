@@ -24,5 +24,8 @@
 #include <netvizd.h>
 
 void *sens_thread(void *arg);
+int sens_submit_ts_data(struct nv_sens *s, int time, int value);
 
 #endif
+
+/* vim: set ts=4 sw=4: */

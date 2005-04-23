@@ -148,12 +148,13 @@ int main(int argc, char *argv[]) {
 
 	/* setup pthreads */
 	pthread_attr_init(&attr);
-	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
 	
 	/* start up storage instance threads */
 	list_for_each(i, &nv_stor_list) {
 		int ret = 0;
 		struct nv_stor *s = node_data(struct nv_stor, i);
+
+		if (s->beat == 0 && s->beatfunc == NULL) continue;
 		s->thread = nv_calloc(pthread_t, 1);
 		ret = pthread_create(s->thread, &attr, stor_thread, s);
 		if (ret != 0) {
@@ -167,6 +168,8 @@ int main(int argc, char *argv[]) {
 	list_for_each(i, &nv_sens_list) {
 		int ret = 0;
 		struct nv_sens *s = node_data(struct nv_sens, i);
+
+		if (s->beat == 0 && s->beatfunc == NULL) continue;
 		s->thread = nv_calloc(pthread_t, 1);
 		ret = pthread_create(s->thread, &attr, sens_thread, s);
 		if (ret != 0) {
@@ -174,6 +177,21 @@ int main(int argc, char *argv[]) {
 			stat = EXIT_FAILURE;
 			goto cleanup;
 		}
+	}
+
+	/* do some thread startup cleanup */
+	pthread_attr_destroy(&attr);
+
+	/* wait on all the threads */
+	list_for_each(i, &nv_stor_list) {
+		struct nv_stor *s = node_data(struct nv_stor, i);
+		if (s->beat == 0 && s->beatfunc == NULL) continue;
+		pthread_join(*s->thread, NULL);
+	}
+	list_for_each(i, &nv_sens_list) {
+		struct nv_sens *s = node_data(struct nv_sens, i);
+		if (s->beat == 0 && s->beatfunc == NULL) continue;
+		pthread_join(*s->thread, NULL);
 	}
 
 	/* shut down */

@@ -280,6 +280,7 @@ int create_conf() {
 		struct global_storage *f = node_data(struct global_storage, i);
 
 		stor = nv_calloc(struct nv_stor, 1);
+		nv_list_new(stor->dsets);
 		name_copy(stor->name, f->name);
 
 		/* copy the config values over */
@@ -336,6 +337,7 @@ int create_conf() {
 		struct global_sensor *f = node_data(struct global_sensor, i);
 
 		sens = nv_calloc(struct nv_sens, 1);
+		nv_list_new(sens->dsets);
 		name_copy(sens->name, f->name);
 
 		/* copy the config values over */
@@ -404,6 +406,7 @@ int create_conf() {
 	list_for_each(i, &file_dset_list) {
 		int err = 0;
 		nv_node n;
+		nv_node o;
 		nv_node j;
 		struct nv_dsts *ds = NULL;
 		struct data_set *f = node_data(struct data_set, i);
@@ -426,6 +429,9 @@ int create_conf() {
 				
 				if (strncmp(f->sensor, c->name, NAME_LEN) == 0) {
 					ds->sens = c;
+					nv_node_new(o);
+					set_node_data(o, ds);
+					list_append(c->dsets, o);
 					err = 0;
 				}
 			}
@@ -444,6 +450,9 @@ int create_conf() {
 				
 				if (strncmp(f->storage, c->name, NAME_LEN) == 0) {
 					ds->stor = c;
+					nv_node_new(o);
+					set_node_data(o, ds);
+					list_append(c->dsets, o);
 					err = 0;
 				}
 			}

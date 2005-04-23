@@ -63,13 +63,13 @@ int rrd_inst_init(struct nv_sens *s) {
 	me = nv_calloc(struct rrd_data, 1);
 	s->data = (void *)me;
 	me->interval = DEF_INTERVAL;
-	s->beat = DEF_INTERVAL * 1000;
+	s->beat = DEF_INTERVAL;
 	list_for_each(i, s->conf) {
 		struct nv_conf *c = node_data(struct nv_conf, i);
 
 		if (strncmp(c->key, "interval", NAME_LEN) == 0) {
 			me->interval = atoi(c->value);
-			s->beat = me->interval * 1000;
+			s->beat = me->interval;
 		} else if (strncmp(c->key, "file", NAME_LEN) == 0) {
 			me->file = c->value;
 		} else {
@@ -98,6 +98,7 @@ int rrd_inst_free(struct nv_sens *s) {
 }
 
 int rrd_beatfunc(struct nv_sens *s) {
-
-
+	nv_log(LOG_INFO, "rrd_beatfunc() called");
+	
+	return 0;
 }

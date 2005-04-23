@@ -103,6 +103,11 @@ static int _nv_pth_status;
 #define NAME_LEN 256
 
 /*
+ * Time for various thread sleeps
+ */
+#define THREAD_SLEEP 100000
+
+/*
  * Copy a string of length NAME_LEN safely.
  */
 #define name_copy(d, s) \
