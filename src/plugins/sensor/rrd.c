@@ -24,12 +24,17 @@
 
 #include <netvizd.h>
 #include <nvconfig.h>
+#include <io.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #define DEF_INTERVAL 300
 
 struct rrd_data {
 	int			interval;
 	char *		file;
+	int			start;
+	int			column;
 };
 
 #define sensor_init		rrd_LTX_sensor_init
@@ -37,6 +42,7 @@ static int rrd_free(struct nv_sens_p *p);
 static int rrd_inst_init(struct nv_sens *s);
 static int rrd_inst_free(struct nv_sens *s);
 static int rrd_beatfunc(struct nv_sens *s);
+static int rrd_get_ts_utime(char *f);
 
 int sensor_init(struct nv_sens_p *p) {
 	int stat = 0;
@@ -72,6 +78,10 @@ int rrd_inst_init(struct nv_sens *s) {
 			s->beat = me->interval;
 		} else if (strncmp(c->key, "file", NAME_LEN) == 0) {
 			me->file = c->value;
+		} else if (strncmp(c->key, "start", NAME_LEN) == 0) {
+			me->start = atoi(c->value);
+		} else if (strncmp(c->key, "column", NAME_LEN) == 0) {
+			me->column = atoi(c->value);
 		} else {
 			nv_log(LOG_ERROR, "unknown key \"%s\" with value \"%s\"",
 				   c->key, c->value);
@@ -94,11 +104,82 @@ cleanup:
 
 int rrd_inst_free(struct nv_sens *s) {
 
-
+	return 0;
 }
 
 int rrd_beatfunc(struct nv_sens *s) {
-	nv_log(LOG_INFO, "rrd_beatfunc() called");
+	nv_node n;
+	time_t my_time = 0;
+	time_t rrd_time = 0;
+	FILE *rrdout = NULL;
+	int fd = 0;
+	char buf[BUF_LEN];
+	struct rrd_data *me = NULL;
+
+	me = (struct rrd_data *)s->data;
+
+	/* get current and RRD times */
+	my_time = time(NULL);
+	rrd_time = rrd_get_ts_utime(me->file);
+		
+	/* loop through data sets and submit appropriate data to each storage
+	 * plugin */
+	list_for_each(n, s->dsets) {
+		time_t ds_time = 0;
+		struct nv_dsts *d = node_data(struct nv_dsts, n);
+
+		/* get last updated time for data set */
+		ds_time = stor_get_ts_utime(d);
+		if (ds_time == 0) {
+			ds_time = me->start;
+		}
+
+		if (rrd_time > ds_time) {
+			/* we need to update the storage for this dataset, call
+			 * rrdtool to get data since last update */
+			snprintf(buf, BUF_LEN, "rrdtool fetch %s AVERAGE -s %i -e %i",
+					 me->file, ds_time, rrd_time);
+			nv_log(LOG_DEBUG, "running cmd: %s", buf);
+			rrdout = popen(buf, "r");
+			fd = fileno(rrdout);
+
+			/* read each line and add to storage */
+			for (;;) {
+				ssize_t c = 0;
+
+				c = readline(fd, buf, BUF_LEN-1);
+				if (0 == c) break;
+				buf[BUF_LEN-1] = '\0';
+				printf("%s", buf);
+			}
+		}
+
+		/* store new updated time for data set */
+		stor_submit_ts_utime(d, my_time);
+	}
 	
 	return 0;
+}
+
+int rrd_get_ts_utime(char *f) {
+	FILE *rrdout = NULL;
+	char buf[BUF_LEN];
+	time_t utime = 0;
+	int c = 0;
+
+	snprintf(buf, BUF_LEN, "rrdtool last %s", f);
+	nv_log(LOG_DEBUG, "running cmd: %s", buf);
+	rrdout = popen(buf, "r");
+	c = fread(buf, 1, BUF_LEN-1, rrdout);
+	if (c > 0) {
+		buf[c] = '\0';
+		if (strncmp("-1", buf, 2) == 0) {
+			/* rrdtool last returns -1 if no file */
+			goto cleanup;
+		}
+		utime = atoi(buf);
+	}
+
+cleanup:
+	return utime;
 }

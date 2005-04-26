@@ -74,9 +74,16 @@ enum nv_ds_type {
 	ds_type_absolute,
 	ds_type_gauge
 };
+enum nv_ds_cf {
+	ds_cf_average = 0,
+	ds_cf_min,
+	ds_cf_max,
+	ds_cf_last
+};
 struct nv_dsts {
 	char				name[NAME_LEN];
 	enum nv_ds_type		type;
+	enum nv_ds_cf		cf;
 	char				desc[NAME_LEN];
 	struct nv_sens *	sens;
 	struct nv_stor *	stor;
@@ -100,7 +107,11 @@ struct nv_stor_p {
 	int					(*inst_init)(struct nv_stor *);
 	int					(*inst_free)(struct nv_stor *);
 
-	int					(*stor_ts_data)(char *, char *, int, int);
+	int					(*stor_ts_data)(struct nv_stor *, char *, char *,
+										time_t, int);
+	int					(*stor_ts_utime)(struct nv_stor *, char *, char *,
+										time_t);
+	time_t				(*get_ts_utime)(struct nv_stor *, char *, char *);
 };
 	
 /* a loaded sensor plugin */

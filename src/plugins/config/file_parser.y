@@ -58,7 +58,8 @@ void clear_values();
 			system_list2 system_item d_desc_stmt s_desc_stmt system_block
 %type <ch>	generic_item2
 %token <i>	GLOBAL PLUGIN TYPE FILEE STORAGE SENSOR PROTO AUTH DATA_SET SEMI
-			LBRACE RBRACE CRAP SYSTEM DESC COUNTER DERIVE ABSOLUTE GAUGE
+			LBRACE RBRACE CRAP SYSTEM DESC COUNTER DERIVE ABSOLUTE GAUGE CF
+			AVERAGE MIN MAX LAST
 %token <ch> WORD STRING INT YES NO
 
 %start start
@@ -106,6 +107,7 @@ data_item		: dtype_stmt SEMI
 		   		| sensor_stmt SEMI
 				| storage_stmt SEMI
 				| d_desc_stmt SEMI
+				| cf_stmt SEMI
 
 system_list		: system_list2
 			 	| { }
@@ -145,6 +147,11 @@ dtype_stmt		: TYPE COUNTER		{ d_set->type = ds_type_counter; }
 				| TYPE GAUGE		{ d_set->type = ds_type_gauge; }
 
 d_desc_stmt		: DESC STRING		{ d_set->desc = $2; }
+
+cf_stmt			: CF AVERAGE		{ d_set->cf = ds_cf_average; }
+				| CF MIN			{ d_set->cf = ds_cf_min; }
+				| CF MAX			{ d_set->cf = ds_cf_max; }
+				| CF LAST			{ d_set->cf = ds_cf_last; }
 
 sensor_stmt		: SENSOR STRING		{ d_set->sensor = $2; }
 

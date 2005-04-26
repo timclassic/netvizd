@@ -74,7 +74,7 @@ int sens_submit_ts_data(struct nv_sens *s, int time, int value) {
 
 	list_for_each(n, s->dsets) {
 		struct nv_dsts *d = node_data(struct nv_dsts, n);
-		stor_submit_ts_data(d->stor, d, time, value);
+		stor_submit_ts_data(d, time, value);
 	}
 
 	return 0;

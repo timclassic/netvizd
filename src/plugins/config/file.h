@@ -65,6 +65,7 @@ struct data_set {
 	char *			name;
 	char *			desc;
 	enum nv_ds_type	type;
+	enum nv_ds_cf	cf;
 	char *			sensor;
 	char *			storage;
 	char *			system;

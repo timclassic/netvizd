@@ -63,6 +63,11 @@ yes				{ return YES; }
 no				{ return NO; }
 system			{ return SYSTEM; }
 description		{ return DESC; }
+cf				{ return CF; }
+average			{ return AVERAGE; }
+min				{ return MIN; }
+max				{ return MAX; }
+last			{ return LAST; }
 
 ;				{ return SEMI; }
 \{				{ return LBRACE; }

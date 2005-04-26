@@ -163,6 +163,7 @@ void add_data_set(struct data_set *d) {
 	nv_log(LOG_DEBUG, "    name: %s", d->name);
 	nv_log(LOG_DEBUG, "    description: %s", d->desc);
 	nv_log(LOG_DEBUG, "    type: %i", d->type);
+	nv_log(LOG_DEBUG, "    cf: %i", d->cf);
 	nv_log(LOG_DEBUG, "    sensor: %s", d->sensor);
 	nv_log(LOG_DEBUG, "    storage: %s", d->storage);
 	nv_log(LOG_DEBUG, "    system: %s", d->system);
@@ -415,6 +416,7 @@ int create_conf() {
 		name_copy(ds->name, f->name);
 		name_copy(ds->desc, f->desc);
 		ds->type = f->type;
+		ds->cf = f->cf;
 		if (ds->type == ds_type_none) {
 			nv_log(LOG_ERROR, "type not specified for data set %s",
 				   ds->name);

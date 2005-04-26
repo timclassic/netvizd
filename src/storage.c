@@ -67,9 +67,23 @@ void *stor_thread(void *arg) {
  * Here we submit a time-series data element to be stored in the given
  * storage plugin.
  */
-int stor_submit_ts_data(struct nv_stor *s, struct nv_dsts *d, int time,
-						int value) {
-	return s->plug->stor_ts_data(d->name, d->sys->name, time, value);
+int stor_submit_ts_data(struct nv_dsts *d, time_t time, int value) {
+	return d->stor->plug->stor_ts_data(d->stor, d->name, d->sys->name, time,
+									   value);
+}
+
+/*
+ * Let a sensor plugin store the last-updated time in a storage plugin.
+ */
+int stor_submit_ts_utime(struct nv_dsts *d, time_t time) {
+	return d->stor->plug->stor_ts_utime(d->stor, d->name, d->sys->name, time);
+}
+
+/*
+ * Let a sensor plugin retreive the last-updated time.
+ */
+time_t stor_get_ts_utime(struct nv_dsts *d) {
+	return d->stor->plug->get_ts_utime(d->stor, d->name, d->sys->name);
 }
 
 /* vim: set ts=4 sw=4: */

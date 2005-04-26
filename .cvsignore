@@ -5,7 +5,7 @@ autoscan.log
 config.h.in
 configure
 libltdl
-install
+debug
 *.swp
 Makefile
 config.h

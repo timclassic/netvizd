@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2005 by Robert Timothy Stewart                          *
+ *   Copyright (C) 2004 by Tim Stewart                                     *
  *   tims@cc.gatech.edu                                                    *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -18,16 +18,17 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
-#ifndef _HEADER_H_
-#define _HEADER_H_
+#ifndef _SRC_IO_H_
+#define _SRC_IO_H_
 
-#include <netvizd.h>
-
-void *stor_thread(void *arg);
-int stor_submit_ts_data(struct nv_dsts *d, time_t time, int value);
-int stor_submit_ts_utime(struct nv_dsts *d, time_t time);
-time_t stor_get_ts_utime(struct nv_dsts *d);
-
+#ifdef HAVE_CONFIG_H
+#include <config.h>
 #endif
 
-/* vim: set ts=4 sw=4: */
+#include <pthread.h>
+
+ssize_t readn(int filedes, void *buf, size_t nbytes);
+ssize_t writen(int filedes, const void *buf, size_t nbytes);
+ssize_t readline(int filedes, void *buf, size_t maxlen);
+
+#endif
