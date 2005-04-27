@@ -109,21 +109,27 @@ int rrd_inst_free(struct nv_sens *s) {
 
 int rrd_beatfunc(struct nv_sens *s) {
 	nv_node n;
-	time_t my_time = 0;
 	time_t rrd_time = 0;
 	FILE *rrdout = NULL;
 	int fd = 0;
 	char buf[BUF_LEN];
 	struct rrd_data *me = NULL;
+	ssize_t c = 0;
+	char *word = NULL;
+	char *brk = NULL;
+	int col = -1;
+	int row = 0;
+	time_t vtime = 0;
+	time_t valid_vtime = 0;
+	double value = 0.0L;
+	char sep[] = " :\t\n";
 
+	/* get our local instance data */
 	me = (struct rrd_data *)s->data;
 
-	/* get current and RRD times */
-	my_time = time(NULL);
-	rrd_time = rrd_get_ts_utime(me->file);
-		
 	/* loop through data sets and submit appropriate data to each storage
 	 * plugin */
+	rrd_time = rrd_get_ts_utime(me->file);
 	list_for_each(n, s->dsets) {
 		time_t ds_time = 0;
 		struct nv_dsts *d = node_data(struct nv_dsts, n);
@@ -145,17 +151,42 @@ int rrd_beatfunc(struct nv_sens *s) {
 
 			/* read each line and add to storage */
 			for (;;) {
-				ssize_t c = 0;
-
+nextline:
+				/* read line */
 				c = readline(fd, buf, BUF_LEN-1);
-				if (0 == c) break;
 				buf[BUF_LEN-1] = '\0';
-				printf("%s", buf);
+				if (0 == c) break;
+				row++;
+				/* skip first line */
+				if (row < 3) goto nextline;
+
+				/* parse line into time and find our column */
+				col = -1;
+				for (word = strtok_r(buf, sep, &brk); word;
+					 word = strtok_r(NULL, sep, &brk)) {
+					if (col == -1) {
+						/* time */
+						vtime = atoi(word);
+					} else if (me->column == col) {
+						/* data value in our column */
+						if (strncmp("nan", word, 3) == 0) goto nextline;
+						value = atof(word);
+						nv_log(LOG_DEBUG, "adding time %i with value %f",
+							   vtime, value);
+						stor_submit_ts_data(d, vtime, value);
+						valid_vtime = vtime;
+						break;
+					}
+					col++;
+				}
 			}
+			pclose(rrdout);
 		}
 
-		/* store new updated time for data set */
-		stor_submit_ts_utime(d, my_time);
+		/* store new updated time for data set... TODO This currently will
+		 * cause the above code to attempt to re-add the last value added
+		 * during this run when it is run next. */
+		stor_submit_ts_utime(d, valid_vtime);
 	}
 	
 	return 0;
@@ -181,5 +212,6 @@ int rrd_get_ts_utime(char *f) {
 	}
 
 cleanup:
+	pclose(rrdout);
 	return utime;
 }

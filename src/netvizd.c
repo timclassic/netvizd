@@ -28,6 +28,7 @@
 #include <nvlist.h>
 #include <sensor.h>
 #include <storage.h>
+#include <proto.h>
 #include <stdarg.h>
 #include <string.h>
 #include <errno.h>
@@ -172,6 +173,22 @@ int main(int argc, char *argv[]) {
 		if (s->beat == 0 && s->beatfunc == NULL) continue;
 		s->thread = nv_calloc(pthread_t, 1);
 		ret = pthread_create(s->thread, &attr, sens_thread, s);
+		if (ret != 0) {
+			nv_perror(LOG_ERROR, "pthread_create()", ret);
+			stat = EXIT_FAILURE;
+			goto cleanup;
+		}
+	}
+
+	/* start up our protocol threads
+	 * TODO This needs to be changed to support instances of a protocol. */
+	list_for_each(i, &nv_proto_p_list) {
+		int ret = 0;
+		struct nv_proto_p *p = node_data(struct nv_proto_p, i);
+
+		if (p->listen == NULL) continue;
+		p->thread = nv_calloc(pthread_t, 1);
+		ret = pthread_create(p->thread, &attr, proto_thread, p);
 		if (ret != 0) {
 			nv_perror(LOG_ERROR, "pthread_create()", ret);
 			stat = EXIT_FAILURE;

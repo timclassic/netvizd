@@ -108,7 +108,9 @@ struct nv_stor_p {
 	int					(*inst_free)(struct nv_stor *);
 
 	int					(*stor_ts_data)(struct nv_stor *, char *, char *,
-										time_t, int);
+										time_t, double);
+	nv_list *			(*get_ts_data)(struct nv_stor *, char *, char *,
+									   time_t, time_t, int);
 	int					(*stor_ts_utime)(struct nv_stor *, char *, char *,
 										time_t);
 	time_t				(*get_ts_utime)(struct nv_stor *, char *, char *);
@@ -128,6 +130,10 @@ struct nv_sens_p {
 struct nv_proto_p {
 	char 				name[NAME_LEN];
 	char				file[NAME_LEN];
+
+	pthread_t *			thread;
+
+	int					(*listen)();
 };
 
 /* a loaded authentication plugin */

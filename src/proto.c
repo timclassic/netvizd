@@ -24,66 +24,22 @@
 
 #include <netvizd.h>
 #include <nvconfig.h>
-#include <storage.h>
+#include <proto.h>
 
-/*
- * The entry point for a storage heartbeat thread.  This will only be started
- * if the storage instance has indicated that it periodically needs to be
- * called.  The storage instance can do anything it wishes here, including
- * blocking.
- */
-void *stor_thread(void *arg) {
-	struct nv_stor *s = (struct nv_stor *)arg;
-	time_t last;
-	time_t now;
+void *proto_thread(void *arg) {
+	struct nv_proto_p *p = (struct nv_proto_p *)arg;
 	int *stat = NULL;
 
-	nv_log(LOG_DEBUG, "work thread for storage instance %s starting", s->name);
+	nv_log(LOG_INFO, "work thread for proto instance %s starting", p->name);
 
 	stat = nv_calloc(int, 1);
+	*stat = 0;
 
-	last = time(NULL);
-	for (;;) {
-		/* call beatfunc if necessary */
-		if (s->beat > 0 && s->beatfunc != NULL) {
-			now = time(NULL);
-			if (now >= last+s->beat) {
-				last = now;
-				*stat = s->beatfunc(s);
-			}
-			if (*stat != 0) break;
-		}
+	p->listen();
 
-		/* give up the processor for a bit */
-		usleep(THREAD_SLEEP);
-	}
-
-	nv_log(LOG_DEBUG, "work thread for storage instance %s terminating",
-		   s->name);
+	nv_log(LOG_INFO, "work thread for proto instance %s terminating",
+		   p->name);
 	return (void *)stat;
-}
-
-/*
- * Here we submit a time-series data element to be stored in the given
- * storage plugin.
- */
-int stor_submit_ts_data(struct nv_dsts *d, time_t time, double value) {
-	return d->stor->plug->stor_ts_data(d->stor, d->name, d->sys->name, time,
-									   value);
-}
-
-/*
- * Let a sensor plugin store the last-updated time in a storage plugin.
- */
-int stor_submit_ts_utime(struct nv_dsts *d, time_t time) {
-	return d->stor->plug->stor_ts_utime(d->stor, d->name, d->sys->name, time);
-}
-
-/*
- * Let a sensor plugin retreive the last-updated time.
- */
-time_t stor_get_ts_utime(struct nv_dsts *d) {
-	return d->stor->plug->get_ts_utime(d->stor, d->name, d->sys->name);
 }
 
 /* vim: set ts=4 sw=4: */

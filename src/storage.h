@@ -18,13 +18,13 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
-#ifndef _HEADER_H_
-#define _HEADER_H_
+#ifndef _STORAGE_H_
+#define _STORAGE_H_
 
 #include <netvizd.h>
 
 void *stor_thread(void *arg);
-int stor_submit_ts_data(struct nv_dsts *d, time_t time, int value);
+int stor_submit_ts_data(struct nv_dsts *d, time_t time, double value);
 int stor_submit_ts_utime(struct nv_dsts *d, time_t time);
 time_t stor_get_ts_utime(struct nv_dsts *d);
 
