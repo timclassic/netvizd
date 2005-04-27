@@ -23,10 +23,20 @@
 
 #include <netvizd.h>
 
+/* data type for returned bulk data */
+struct nv_ts_data {
+	time_t		time;
+	double		value;
+	double		min;
+	double		max;
+};
+
 void *stor_thread(void *arg);
 int stor_submit_ts_data(struct nv_dsts *d, time_t time, double value);
 int stor_submit_ts_utime(struct nv_dsts *d, time_t time);
 time_t stor_get_ts_utime(struct nv_dsts *d);
+nv_list *stor_get_ts_data(struct nv_dsts *d, time_t start, time_t end,
+						  int res);
 
 #endif
 

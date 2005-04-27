@@ -86,4 +86,13 @@ time_t stor_get_ts_utime(struct nv_dsts *d) {
 	return d->stor->plug->get_ts_utime(d->stor, d->name, d->sys->name);
 }
 
+/*
+ * Request data points between two times at a certain resolution
+ */
+nv_list *stor_get_ts_data(struct nv_dsts *d, time_t start, time_t end,
+						  int res) {
+	return d->stor->plug->get_ts_data(d->stor, d->name, d->sys->name, start,
+									  end, res);
+}
+
 /* vim: set ts=4 sw=4: */

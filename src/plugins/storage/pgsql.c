@@ -26,6 +26,7 @@
 #include <nvconfig.h>
 #include <libpq-fe.h>
 #include <time.h>
+#include <storage.h>
 
 /* various PostgreSQL OIDs, used for parameter types */
 #define VARCHAROID			1043
@@ -62,7 +63,7 @@ static void pgsql_disconnect(PGconn *conn);
 static int pgsql_init_table(PGconn *c, char *table, char *sql);
 static int pgsql_add_row(PGconn *c, char *table, time_t time, double value);
 static nv_list *pgsql_get_ts_data(struct nv_stor *s, char *dset, char *sys,
-								  time_t start, time_t end, int resolution);
+								  time_t start, time_t end, int res);
 
 int storage_init(struct nv_stor_p *p) {
 	int stat = 0;
@@ -215,12 +216,82 @@ cleanup:
 	return stat;
 }
 
+
+#define SQL_GET_TS		"SELECT EXTRACT(epoch FROM time), value " \
+						"FROM %s " \
+						"WHERE time >= '%s' AND time <= '%s';"
 static nv_list *pgsql_get_ts_data(struct nv_stor *s, char *dset, char *sys,
-								  time_t start, time_t end, int resolution) {
+								  time_t start, time_t end, int res) {
+	struct pgsql_data *me = NULL;
 	nv_list *list = NULL;
+	int stat = 0;
+	int ret = 0;
+	PGconn *c = NULL;
+	char buf[NAME_LEN];
+	char table[NAME_LEN];
+	char startbuf[26];
+	char endbuf[26];
+	PGresult *result = NULL;
+	int row = 0;
+	int rownum = 0;
+	int status = 0;
+	
+	nv_list_new(list);
+	me = (struct pgsql_data *)s->data;
 
+	/* get a connection and init the table */
+	c = pgsql_connect(s);
+	if (NULL == c) {
+		stat = -1;
+		goto cleanup;
+	}
+	snprintf(table, NAME_LEN, "dsts_%s_%s", sys, dset);
+	table[NAME_LEN-1] = '\0';
+	ret = pgsql_init_table(c, table, SQL_CREATE_DS);
+	if (0 > ret) {
+		nv_log(LOG_ERROR, "error initializing table %s, aborting", buf);
+		stat = -1;
+		goto cleanup;
+	}
 
+	/* pull data from the table */
+	ctime_r(&start, startbuf);
+	ctime_r(&end, endbuf);
+	snprintf(buf, NAME_LEN, SQL_GET_TS, table, startbuf, endbuf);
+	buf[NAME_LEN-1] = '\0';
+	PQclear(result);
+	result = PQexec(c, buf);
+	status = PQresultStatus(result);
+	switch(status) {
+		case PGRES_TUPLES_OK:
+			/* do nothing, we're OK */
+			break;
 
+		default:
+			nv_log(LOG_ERROR, "libpq: %s", PQresultErrorMessage(result));
+			stat = -1;
+			goto cleanup;
+			break;
+	}
+
+	/* add data to list */
+	rownum = PQntuples(result);
+	for (row = 0; row < rownum; row++) {
+		nv_node n;
+		struct nv_ts_data *d = NULL;
+
+		d = nv_calloc(struct nv_ts_data, 1);
+		d->time = atoi(PQgetvalue(result, row, 0));
+		d->value = atof(PQgetvalue(result, row, 1));
+		
+		nv_node_new(n);
+		set_node_data(n, d);
+		list_append(list, n);
+	}
+	
+cleanup:
+	PQclear(result);
+	pgsql_disconnect(c);
 	return list;
 }
 

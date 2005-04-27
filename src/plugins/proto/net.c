@@ -31,6 +31,7 @@
 #include <pthread.h>
 #include <ctype.h>
 #include <stdio.h>
+#include <storage.h>
 
 static int net_listen();
 static void *client_thread(void *);
@@ -120,6 +121,8 @@ cleanup:
 #define MSG_100		"100 netvizd v0.1 Copyright (c) Robert Timothy Stewart\r\n"
 #define MSG_101		"101 proto_1.0\r\n"
 #define MSG_102		"102 Goodbye.\r\n"
+#define MSG_103		"103 %i %f %f %f\r\n"
+#define MSG_104		"104 FETCH command complete.\r\n"
 
 #define MSG_200		"200 Invalid request.\r\n"
 
@@ -168,22 +171,86 @@ void *client_thread(void *arg) {
 			writen(*fd, MSG_102, strlen(MSG_102));
 			break;
 		} else if (strncmp(word, WORD_FETCH, strlen(WORD_FETCH)) == 0) {
-			/* we have a fetch request */
+			char *system = NULL;
+			char *dsname = NULL;
+			time_t start;
+			time_t end;
+			int res;
+			nv_list *result;
+			nv_node i;
+			nv_node t;
+			struct nv_dsts *dset = NULL;
+			
+			/* we have a fetch request... format:
+			 *     fetch <system> <dataset> <start> <end> <resolution> */
+			system = strtok_r(NULL, sep, &brk);
+			if (system == NULL) {
+				invalid_query(*fd);
+				continue;
+			}
+			dsname = strtok_r(NULL, sep, &brk);
+			if (dsname == NULL) {
+				invalid_query(*fd);
+				continue;
+			}
 			word = strtok_r(NULL, sep, &brk);
 			if (word == NULL) {
 				invalid_query(*fd);
 				continue;
 			}
+			start = atoi(word);
+			word = strtok_r(NULL, sep, &brk);
+			if (word == NULL) {
+				invalid_query(*fd);
+				continue;
+			}
+			end = atoi(word);
+			word = strtok_r(NULL, sep, &brk);
+			if (word == NULL) {
+				invalid_query(*fd);
+				continue;
+			}
+			res = atoi(word);
+			word = strtok_r(NULL, sep, &brk);
+			if (word != NULL) {
+				invalid_query(*fd);
+				continue;
+			}
 
-			/* TODO resume here */
-			writen(*fd, "gotcha\r\n", 8);
+			/* find the dataset */
+			list_for_each(i, &nv_dsts_list) {
+				struct nv_dsts *d = NULL;
+				d = node_data(struct nv_dsts, i);
+				if (strcmp(d->name, dsname) == 0 &&
+					strcmp(d->sys->name, system) == 0) {
+					dset = d;
+					break;
+				}
+			}
+			if (dset == NULL) {
+				invalid_query(*fd);
+				continue;
+			}
 
+			/* pull the data and send to client */
+			result = stor_get_ts_data(dset, start, end, res);
+			t = NULL;
+			list_for_each(i, result) {
+				struct nv_ts_data *d = NULL;
+				d = node_data(struct nv_ts_data, i);
 
+				snprintf(buf, BUF_LEN, MSG_103, d->time, d->value,
+						 d->min, d->max);
+				writen(*fd, buf, strlen(buf));
 
-
-
-
-
+				/* clean this entry and previous node */
+				nv_free(d);
+				if (t != NULL) list_del(i->prev);
+				t = i;
+			}
+			list_del(t);
+			nv_free(result);
+			writen(*fd, MSG_104, strlen(MSG_104));
 		} else {
 			invalid_query(*fd);
 		}
