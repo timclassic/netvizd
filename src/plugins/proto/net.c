@@ -139,6 +139,11 @@ void *client_thread(void *arg) {
 	char sep[] = " \t\r\n";
 	char *word = NULL;
 	char *brk = NULL;
+	int skip = 0;
+	int skipt = 0;
+	int skip_cnt = 0;
+	double tally = 0;
+	time_t midtime = 0;
 
 	/* get our file desciptor */
 	fd = (int *)arg;
@@ -232,16 +237,61 @@ void *client_thread(void *arg) {
 				continue;
 			}
 
-			/* pull the data and send to client */
+			/* pull the data and figure out how to achieve given
+			 * resolution */
 			result = stor_get_ts_data(dset, start, end, res);
+			if (result->next != NULL && result->next->next != result) {
+				/* OK, we have at least 2 elements */
+				int diff = 0;
+				struct nv_ts_data *d1 = NULL;
+				struct nv_ts_data *d2 = NULL;
+				
+				/* find time offset between elements in seconds */
+				d1 = node_data(struct nv_ts_data, result->next);
+				d2 = node_data(struct nv_ts_data, result->next->next);
+				diff = d2->time-d1->time;
+				
+				/* find the frequency of rows to accept (skip):
+				 *     1 = take every row
+				 *     2 = take every other row
+				 *     3 = take every thrid row
+				 * etc.  Note that this is an estimate - when inexact, you
+				 * will get the next highest resolution possible, given
+				 * the colleted data.  Finally, get skipt, which is half of
+				 * skip - this is the time value we pick for submission */
+				if (res*60 <= diff) skip = 1;
+				else skip = res*60/diff;
+				nv_log(LOG_DEBUG, "Calculated skip of %i", skip);
+				if (skip == 1) skipt = 1;
+				else if (skip == 2) skipt = 1;
+				else skipt = skip/2+1;
+			}
+
+			/* send data to the client */
 			t = NULL;
+			skip_cnt = 1;
 			list_for_each(i, result) {
 				struct nv_ts_data *d = NULL;
 				d = node_data(struct nv_ts_data, i);
 
-				snprintf(buf, BUF_LEN, MSG_103, d->time, d->value,
-						 d->min, d->max);
-				writen(*fd, buf, strlen(buf));
+				/* add this value to tally */
+				tally += d->value;
+
+				/* do we report this time? */
+				if (skip_cnt == skipt) {
+					midtime = d->time;
+				}
+				
+				/* is it time to report? */
+				if (skip_cnt == skip) {
+					snprintf(buf, BUF_LEN, MSG_103, midtime, tally,
+							 d->min, d->max);
+					writen(*fd, buf, strlen(buf));
+					skip_cnt = 1;
+					tally = 0.0L;
+				} else {
+					skip_cnt++;
+				}
 
 				/* clean this entry and previous node */
 				nv_free(d);
