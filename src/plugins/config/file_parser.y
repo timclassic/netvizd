@@ -56,6 +56,7 @@ void clear_values();
 			generic_list generic_item top_list top_item storage_stmt
 			global_list2 data_list2 plugin_list2 generic_list2 system_list
 			system_list2 system_item d_desc_stmt s_desc_stmt system_block
+			cf_stmt
 %type <ch>	generic_item2
 %token <i>	GLOBAL PLUGIN TYPE FILEE STORAGE SENSOR PROTO AUTH DATA_SET SEMI
 			LBRACE RBRACE CRAP SYSTEM DESC COUNTER DERIVE ABSOLUTE GAUGE CF
@@ -67,61 +68,61 @@ void clear_values();
 %%
 
 start			: top_list
-				| { }
+				| { };
 
 top_list		: top_list top_item
-		  		| top_item
+		  		| top_item;
 
 top_item		: global_block SEMI
-	  			| system_block SEMI
+	  			| system_block SEMI;
 
-global_block	: GLOBAL LBRACE global_list RBRACE
+global_block	: GLOBAL LBRACE global_list RBRACE;
 
 system_block	: SYSTEM STRING { sys->name = $2; } LBRACE system_list RBRACE
 				{	add_system(sys);
-					new_system; }
+					new_system; };
 
 data_block		: DATA_SET STRING LBRACE data_list RBRACE
 				{	d_set->name = $2;
 					d_set->system = strdup(sys->name);
 					add_data_set(d_set);
-					new_data_set; }
+					new_data_set; };
 
 global_list		: global_list2
-			 	| { }
+			 	| { };
 
 global_list2	: global_list2 global_item
-			 	| global_item
+			 	| global_item;
 
 global_item		: plugin_block SEMI
 			 	| storage_block SEMI
-				| sensor_block SEMI
+				| sensor_block SEMI;
 
 data_list		: data_list2
-		   		| { }
+		   		| { };
 
 data_list2		: data_list2 data_item
-		   		| data_item
+		   		| data_item;
 
 data_item		: dtype_stmt SEMI
 		   		| sensor_stmt SEMI
 				| storage_stmt SEMI
 				| d_desc_stmt SEMI
-				| cf_stmt SEMI
+				| cf_stmt SEMI;
 
 system_list		: system_list2
-			 	| { }
+			 	| { };
 
 system_list2	: system_list2 system_item
-			 	| system_item
+			 	| system_item;
 
 system_item		: data_block SEMI
-				| s_desc_stmt SEMI
+				| s_desc_stmt SEMI;
 
 plugin_block	: PLUGIN STRING LBRACE plugin_list RBRACE
 				{	g_plugin->name = $2;
 					add_plugin(g_plugin);
-					new_plugin; }
+					new_plugin; };
 
 storage_block	: STORAGE STRING TYPE STRING LBRACE { push_generic(); }
 				  generic_list
@@ -130,7 +131,7 @@ storage_block	: STORAGE STRING TYPE STRING LBRACE { push_generic(); }
 					g_storage->values = g_values;
 					add_storage(g_storage);
 					new_storage;
-					clear_values(); }
+					clear_values(); };
 
 sensor_block	: SENSOR STRING TYPE STRING LBRACE { push_generic(); }
 				  generic_list
@@ -139,54 +140,54 @@ sensor_block	: SENSOR STRING TYPE STRING LBRACE { push_generic(); }
 					g_sensor->values = g_values;
 					add_sensor(g_sensor);
 					new_sensor;
-					clear_values(); }
+					clear_values(); };
 
 dtype_stmt		: TYPE COUNTER		{ d_set->type = ds_type_counter; }
 				| TYPE DERIVE		{ d_set->type = ds_type_derive; }
 				| TYPE ABSOLUTE		{ d_set->type = ds_type_absolute; }
-				| TYPE GAUGE		{ d_set->type = ds_type_gauge; }
+				| TYPE GAUGE		{ d_set->type = ds_type_gauge; };
 
-d_desc_stmt		: DESC STRING		{ d_set->desc = $2; }
+d_desc_stmt		: DESC STRING		{ d_set->desc = $2; };
 
 cf_stmt			: CF AVERAGE		{ d_set->cf = ds_cf_average; }
 				| CF MIN			{ d_set->cf = ds_cf_min; }
 				| CF MAX			{ d_set->cf = ds_cf_max; }
-				| CF LAST			{ d_set->cf = ds_cf_last; }
+				| CF LAST			{ d_set->cf = ds_cf_last; };
 
-sensor_stmt		: SENSOR STRING		{ d_set->sensor = $2; }
+sensor_stmt		: SENSOR STRING		{ d_set->sensor = $2; };
 
-storage_stmt	: STORAGE STRING	{ d_set->storage = $2; }
+storage_stmt	: STORAGE STRING	{ d_set->storage = $2; };
 
-s_desc_stmt		: DESC STRING		{ sys->desc = $2; }
+s_desc_stmt		: DESC STRING		{ sys->desc = $2; };
 
 plugin_list		: plugin_list2
-			 	| { }
+			 	| { };
 
 plugin_list2	: plugin_list2 plugin_item
-			 	| plugin_item
+			 	| plugin_item;
 
 plugin_item		: ptype_stmt SEMI
-			 	| file_stmt SEMI
+			 	| file_stmt SEMI;
 
 ptype_stmt		: TYPE STORAGE	{ g_plugin->type = p_type_storage; }
 				| TYPE SENSOR	{ g_plugin->type = p_type_sensor; }
 				| TYPE PROTO	{ g_plugin->type = p_type_proto; }
-				| TYPE AUTH		{ g_plugin->type = p_type_auth; }
+				| TYPE AUTH		{ g_plugin->type = p_type_auth; };
 
-file_stmt		: FILEE STRING	{ g_plugin->file = $2; }
+file_stmt		: FILEE STRING	{ g_plugin->file = $2; };
 
 generic_list	: generic_list2
-			 	| { }
+			 	| { };
 
 generic_list2	: generic_list2 generic_item
-			 	| generic_item
+			 	| generic_item;
 
-generic_item	: WORD generic_item2 SEMI { add_value($1, $2); }
+generic_item	: WORD generic_item2 SEMI { add_value($1, $2); };
 			 
 generic_item2 	: STRING
 			 	| INT
 			 	| YES
-			 	| NO
+			 	| NO;
 
 %%
 
