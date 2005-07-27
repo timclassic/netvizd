@@ -5,6 +5,7 @@ AM_CFLAGS = -DSYSCONFDIR=\"$(sysconfdir)\"
 
 configdir=$(pkglibdir)/plugins/config
 
+noinst_HEADERS = file.h
 BUILT_SOURCES = file_parser.h
 CLEANFILES = file_lexer.c file_parser.c file_parser.h
 AM_YFLAGS = -d
