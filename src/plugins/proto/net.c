@@ -254,7 +254,7 @@ void *client_thread(void *arg) {
 				/* find the frequency of rows to accept (skip):
 				 *     1 = take every row
 				 *     2 = take every other row
-				 *     3 = take every thrid row
+				 *     3 = take every third row
 				 * etc.  Note that this is an estimate - when inexact, you
 				 * will get the next highest resolution possible, given
 				 * the colleted data.  Finally, get skipt, which is half of
