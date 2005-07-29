@@ -1,5 +1,5 @@
 AC_PREREQ(2.59)
-AC_INIT(netvizd, 0.1)
+AC_INIT([netvizd],[0.1])
 AM_INIT_AUTOMAKE
 AC_CONFIG_SRCDIR([config.h.in])
 AC_CONFIG_HEADER([config.h])
@@ -50,6 +50,9 @@ LIBS="$LIBS $PTHREAD_LIBS"
 # Figure out how to use sockets
 ETR_SOCKET_NSL
 LIBS="$LIBS $ETR_SOCKET_LIBS"
+
+# Check for PostgreSQL libraries
+RTS_PGSQL
 
 # Set up ltdl and libtool
 AC_LIBLTDL_CONVENIENCE
