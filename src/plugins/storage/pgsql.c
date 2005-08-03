@@ -27,43 +27,32 @@
 #include <libpq-fe.h>
 #include <time.h>
 #include <storage.h>
+#include "pgsql.h"
+#include "pgsql_pool.h"
 
 /* various PostgreSQL OIDs, used for parameter types */
 #define VARCHAROID			1043
 #define INT4OID				23
 
-enum pgsql_stat {
-	PGSQL_DISCONNECTED,
-	PGSQL_CONNECTING,
-	PGSQL_CONNECTED
-};
-
-struct pgsql_data {
-	char *			host;
-	int				port;
-	char *			user;
-	char *			pass;
-	char *			db;
-	int				ssl;
-	enum pgsql_stat	stat; /* currently not used */
-};
-
-
 #define storage_init	pgsql_LTX_storage_init
+/* plugin interface */
 static int pgsql_free(struct nv_stor_p *p);
 static int pgsql_inst_init(struct nv_stor *s);
 static int pgsql_inst_free(struct nv_stor *s);
+
+/* data interface */
 static int pgsql_stor_ts_data(struct nv_stor *s, char *dset, char *sys,
 							  time_t time, double value);
+static nv_list *pgsql_get_ts_data(struct nv_stor *s, char *dset, char *sys,
+								  time_t start, time_t end, int res);
 static int pgsql_stor_ts_utime(struct nv_stor *s, char *dset, char *sys,
 							   time_t time);
 static time_t pgsql_get_ts_utime(struct nv_stor *s, char *dset, char *sys);
-static PGconn *pgsql_connect(struct nv_stor *s);
-static void pgsql_disconnect(PGconn *conn);
+
+/* internal management */
 static int pgsql_init_table(PGconn *c, char *table, char *sql);
-static int pgsql_add_row(PGconn *c, char *table, time_t time, double value);
-static nv_list *pgsql_get_ts_data(struct nv_stor *s, char *dset, char *sys,
-								  time_t start, time_t end, int res);
+static int pgsql_add_row(PGconn *c, char *system, char *dataset, time_t time,
+						 double value);
 
 int storage_init(struct nv_stor_p *p) {
 	int stat = 0;
@@ -88,12 +77,21 @@ static int pgsql_free(struct nv_stor_p *p) {
 							"    name VARCHAR(256) PRIMARY KEY, " \
 							"    utime TIMESTAMP WITH TIME ZONE NOT NULL" \
 							");"
+#define SQL_CREATE_DATA		"CREATE TABLE %s ( " \
+							"    system VARCHAR(256), " \
+							"    dataset VARCHAR(256), " \
+							"    time TIMESTAMP WITH TIME ZONE, " \
+							"    value DOUBLE PRECISION, " \
+							"    PRIMARY KEY (system, dataset, time)" \
+							");"
+
 static int pgsql_inst_init(struct nv_stor *s) {
 	nv_node i;
 	int stat = 0;
 	int ret = 0;
-	PGconn *c = NULL;
+	struct pgsql_conn *c = NULL;
 	struct pgsql_data *me = NULL;
+	int pool_num = 0;
 
 	/* process configuration */
 	me = nv_calloc(struct pgsql_data, 1);
@@ -114,6 +112,8 @@ static int pgsql_inst_init(struct nv_stor *s) {
 			me->pass = c->value;
 		} else if (strncmp(c->key, "db", NAME_LEN) == 0) {
 			me->db = c->value;
+		} else if (strncmp(c->key, "pool_num", NAME_LEN) == 0) {
+			pool_num = atoi(c->value);
 		} else if (strncmp(c->key, "ssl", NAME_LEN) == 0) {
 			if (strncmp(c->value, "yes", 3) == 0) {
 				me->ssl = 1;
@@ -150,21 +150,39 @@ static int pgsql_inst_init(struct nv_stor *s) {
 	if (me->port == 0) {
 		me->port = 5432;
 	}
+	if (pool_num == 0) {
+		pool_num = 10;
+	}
+	
+	/* start our connection pool */
+	pgsql_pool_init(s, pool_num);
 
 	/* init the nv_dsts table */
-	c = pgsql_connect(s);
+	c = pgsql_pool_get(s);
 	if (NULL == c) {
 		stat = -1;
 		goto cleanup;
 	}
-	ret = pgsql_init_table(c, "nv_dsts", SQL_CREATE_META);
+	ret = pgsql_init_table(c->conn, "nv_dsts", SQL_CREATE_META);
 	if (0 > ret) {
 		nv_log(LOG_ERROR, "error initializing table nv_dsts, aborting");
 		stat = -1;
 		goto cleanup;
 	}
-	pgsql_disconnect(c);
-
+	
+	/* init the nv_dsts_data table */
+	if (NULL == c) {
+		stat = -1;
+		goto cleanup;
+	}
+	ret = pgsql_init_table(c->conn, "nv_dsts_data", SQL_CREATE_DATA);
+	if (0 > ret) {
+		nv_log(LOG_ERROR, "error initializing table nv_dsts, aborting");
+		stat = -1;
+		goto cleanup;
+	}
+	pgsql_pool_release(s, c);
+	
 cleanup:
 	return stat;
 }
@@ -174,61 +192,49 @@ static int pgsql_inst_free(struct nv_stor *s) {
 }
 
 
-#define SQL_CREATE_DS	"CREATE TABLE %s ( " \
-						"    time TIMESTAMP WITH TIME ZONE PRIMARY KEY, " \
-						"    value DOUBLE PRECISION" \
-						");"
 static int pgsql_stor_ts_data(struct nv_stor *s, char *dset, char *sys,
 							  time_t time, double value) {
 	struct pgsql_data *me = NULL;
 	int stat = 0;
-	PGconn *c = NULL;
+	struct pgsql_conn *c = NULL;
 	int res = 0;
-	char buf[NAME_LEN];
 
 	me = (struct pgsql_data *)s->data;
 	
 	/* get a connection and init the table */
-	c = pgsql_connect(s);
+	c = pgsql_pool_get(s);
 	if (NULL == c) {
-		stat = -1;
-		goto cleanup;
-	}
-	snprintf(buf, NAME_LEN, "dsts_%s_%s", sys, dset);
-	buf[NAME_LEN-1] = '\0';
-	res = pgsql_init_table(c, buf, SQL_CREATE_DS);
-	if (0 > res) {
-		nv_log(LOG_ERROR, "error initializing table %s, aborting", buf);
 		stat = -1;
 		goto cleanup;
 	}
 
 	/* store the data element in the table */
-	res = pgsql_add_row(c, buf, time, value);
+	res = pgsql_add_row(c->conn, sys, dset, time, value);
 	if (0 > res) {
-		nv_log(LOG_ERROR, "error writing values to table %s, aborting", buf);
+		nv_log(LOG_ERROR, "error writing values to table nv_dsts_data, "
+			   "aborting");
 		stat = -1;
 		goto cleanup;
 	}
 
 cleanup:
-	pgsql_disconnect(c);
+	pgsql_pool_release(s, c);
 	return stat;
 }
 
 
 #define SQL_GET_TS		"SELECT EXTRACT(epoch FROM time), value " \
-						"FROM %s " \
-						"WHERE time >= '%s' AND time <= '%s';"
+						"FROM nv_dsts_data " \
+						"WHERE system = '%s' and dataset = '%s' and " \
+						"      time >= '%s' AND time <= '%s';"
 static nv_list *pgsql_get_ts_data(struct nv_stor *s, char *dset, char *sys,
 								  time_t start, time_t end, int res) {
 	struct pgsql_data *me = NULL;
 	nv_list *list = NULL;
 	int stat = 0;
 	int ret = 0;
-	PGconn *c = NULL;
+	struct pgsql_conn *c = NULL;
 	char buf[NAME_LEN];
-	char table[NAME_LEN];
 	char startbuf[26];
 	char endbuf[26];
 	PGresult *result = NULL;
@@ -240,16 +246,8 @@ static nv_list *pgsql_get_ts_data(struct nv_stor *s, char *dset, char *sys,
 	me = (struct pgsql_data *)s->data;
 
 	/* get a connection and init the table */
-	c = pgsql_connect(s);
+	c = pgsql_pool_get(s);
 	if (NULL == c) {
-		stat = -1;
-		goto cleanup;
-	}
-	snprintf(table, NAME_LEN, "dsts_%s_%s", sys, dset);
-	table[NAME_LEN-1] = '\0';
-	ret = pgsql_init_table(c, table, SQL_CREATE_DS);
-	if (0 > ret) {
-		nv_log(LOG_ERROR, "error initializing table %s, aborting", buf);
 		stat = -1;
 		goto cleanup;
 	}
@@ -257,10 +255,10 @@ static nv_list *pgsql_get_ts_data(struct nv_stor *s, char *dset, char *sys,
 	/* pull data from the table */
 	ctime_r(&start, startbuf);
 	ctime_r(&end, endbuf);
-	snprintf(buf, NAME_LEN, SQL_GET_TS, table, startbuf, endbuf);
+	snprintf(buf, NAME_LEN, SQL_GET_TS, sys, dset, startbuf, endbuf);
 	buf[NAME_LEN-1] = '\0';
 	PQclear(result);
-	result = PQexec(c, buf);
+	result = PQexec(c->conn, buf);
 	status = PQresultStatus(result);
 	switch(status) {
 		case PGRES_TUPLES_OK:
@@ -291,7 +289,7 @@ static nv_list *pgsql_get_ts_data(struct nv_stor *s, char *dset, char *sys,
 	
 cleanup:
 	PQclear(result);
-	pgsql_disconnect(c);
+	pgsql_pool_release(s, c);
 	return list;
 }
 
@@ -307,7 +305,7 @@ cleanup:
 
 static int pgsql_stor_ts_utime(struct nv_stor *s, char *dset, char *sys,
 							   time_t time) {
-	PGconn *c = NULL;
+	struct pgsql_conn *c = NULL;
 	int stat = 0;
 	int ret = 0;
 	PGresult *res = NULL;
@@ -316,7 +314,7 @@ static int pgsql_stor_ts_utime(struct nv_stor *s, char *dset, char *sys,
 	char tbuf[26];
 
 	/* get a connection */
-	c = pgsql_connect(s);
+	c = pgsql_pool_get(s);
 	if (NULL == c) {
 		stat = -1;
 		goto cleanup;
@@ -329,7 +327,7 @@ static int pgsql_stor_ts_utime(struct nv_stor *s, char *dset, char *sys,
 	/* see if we already have a value for the update time */
 	snprintf(buf, NAME_LEN, SQL_GET_UTIME, tname);
 	buf[NAME_LEN-1] = '\0';
-	res = PQexec(c, buf);
+	res = PQexec(c->conn, buf);
 	switch(PQresultStatus(res)) {
 		case PGRES_TUPLES_OK:
 			/* do nothing, we're OK */
@@ -354,7 +352,7 @@ static int pgsql_stor_ts_utime(struct nv_stor *s, char *dset, char *sys,
 
 	/* run the SQL */
 	PQclear(res);
-	res = PQexec(c, buf);
+	res = PQexec(c->conn, buf);
 	switch(PQresultStatus(res)) {
 		case PGRES_COMMAND_OK:
 			/* do nothing, we're OK */
@@ -369,12 +367,12 @@ static int pgsql_stor_ts_utime(struct nv_stor *s, char *dset, char *sys,
 
 cleanup:
 	PQclear(res);
-	pgsql_disconnect(c);
+	pgsql_pool_release(s, c);
 	return stat;
 }
 
 time_t pgsql_get_ts_utime(struct nv_stor *s, char *dset, char *sys) {
-	PGconn *c = NULL;
+	struct pgsql_conn *c = NULL;
 	time_t utime = 0;
 	int ret = 0;
 	PGresult *res = NULL;
@@ -384,12 +382,12 @@ time_t pgsql_get_ts_utime(struct nv_stor *s, char *dset, char *sys) {
 	char *resval = NULL;
 
 	/* get a connection and init the table */
-	c = pgsql_connect(s);
+	c = pgsql_pool_get(s);
 	if (NULL == c) {
 		utime = -1;
 		goto cleanup;
 	}
-	ret = pgsql_init_table(c, "nv_dsts", SQL_CREATE_META);
+	ret = pgsql_init_table(c->conn, "nv_dsts", SQL_CREATE_META);
 	if (0 > ret) {
 		nv_log(LOG_ERROR, "error initializing table nv_dsts, aborting");
 		utime = -1;
@@ -403,7 +401,7 @@ time_t pgsql_get_ts_utime(struct nv_stor *s, char *dset, char *sys) {
 	/* get the value for the update time */
 	snprintf(buf, NAME_LEN, SQL_GET_UTIME, tname);
 	buf[NAME_LEN-1] = '\0';
-	res = PQexec(c, buf);
+	res = PQexec(c->conn, buf);
 	switch(PQresultStatus(res)) {
 		case PGRES_TUPLES_OK:
 			/* do nothing, we're OK */
@@ -428,7 +426,7 @@ time_t pgsql_get_ts_utime(struct nv_stor *s, char *dset, char *sys) {
 
 cleanup:
 	PQclear(res);
-	pgsql_disconnect(c);
+	pgsql_pool_release(s, c);
 	return utime;
 }
 
@@ -488,16 +486,18 @@ cleanup:
 }
 
 
-#define SQL_ADD_ROW		"INSERT INTO %s ( time, value ) " \
-						"VALUES ( '%s', %f );"
-int pgsql_add_row(PGconn *c, char *table, time_t time, double value) {
+#define SQL_ADD_ROW		"INSERT INTO nv_dsts_data ( system, dataset, " \
+						"    time, value ) " \
+						"VALUES ( '%s', '%s', '%s', %f );"
+int pgsql_add_row(PGconn *c, char *system, char *dataset, time_t time,
+				  double value) {
 	char buf[NAME_LEN];
 	char tbuf[26];
 	PGresult *res = NULL;
 	int stat = 0;
 
 	ctime_r(&time, tbuf);
-	snprintf(buf, NAME_LEN, SQL_ADD_ROW, table, tbuf, value);
+	snprintf(buf, NAME_LEN, SQL_ADD_ROW, system, dataset, tbuf, value);
 	buf[NAME_LEN-1] = '\0';
 	res = PQexec(c, buf);
 	switch(PQresultStatus(res)) {
@@ -515,36 +515,6 @@ int pgsql_add_row(PGconn *c, char *table, time_t time, double value) {
 cleanup:
 	PQclear(res);
 	return stat;
-}
-
-PGconn *pgsql_connect(struct nv_stor *s) {
-	struct pgsql_data *me = NULL;
-	PGconn *conn = NULL;
-	char buf[NAME_LEN];
-	char sslmode[NAME_LEN];
-
-	me = (struct pgsql_data *)s->data;
-	if (me->ssl) strncpy(sslmode, "require", 8);
-	else strncpy(sslmode, "disable", 8);
-	snprintf(buf, NAME_LEN, "host=%s port=%i user=%s password=%s dbname=%s "
-							"sslmode=%s",
-			 me->host, me->port, me->user, me->pass, me->db, sslmode);
-	conn = PQconnectdb(buf);
-	switch (PQstatus(conn)) {
-		case CONNECTION_OK:
-			/* do nothing */
-			break;
-
-		case CONNECTION_BAD:
-			nv_log(LOG_ERROR, "%s: database connection failed", s->name);
-			conn = NULL;
-			break;
-	}
-	return conn;
-}
-
-void pgsql_disconnect(PGconn *conn) {
-	PQfinish(conn);
 }
 
 /* vim: set ts=4 sw=4: */

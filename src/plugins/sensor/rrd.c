@@ -33,6 +33,7 @@
 struct rrd_data {
 	int			interval;
 	char *		file;
+	char *		rrdtool;
 	int			start;
 	int			column;
 };
@@ -42,7 +43,7 @@ static int rrd_free(struct nv_sens_p *p);
 static int rrd_inst_init(struct nv_sens *s);
 static int rrd_inst_free(struct nv_sens *s);
 static int rrd_beatfunc(struct nv_sens *s);
-static int rrd_get_ts_utime(char *f);
+static int rrd_get_ts_utime(struct nv_sens *s);
 
 int sensor_init(struct nv_sens_p *p) {
 	int stat = 0;
@@ -78,6 +79,8 @@ int rrd_inst_init(struct nv_sens *s) {
 			s->beat = me->interval;
 		} else if (strncmp(c->key, "file", NAME_LEN) == 0) {
 			me->file = c->value;
+		} else if (strncmp(c->key, "rrdtool", NAME_LEN) == 0) {
+			me->rrdtool = c->value;
 		} else if (strncmp(c->key, "start", NAME_LEN) == 0) {
 			me->start = atoi(c->value);
 		} else if (strncmp(c->key, "column", NAME_LEN) == 0) {
@@ -91,6 +94,9 @@ int rrd_inst_init(struct nv_sens *s) {
 	}
 
 	/* check for missing information */
+	if (me->rrdtool == NULL) {
+		me->rrdtool = strdup("rrdtool");
+	}
 	if (me->file == NULL) {
 		stat = -1;
 		nv_log(LOG_ERROR, "file not specified for rrd plugin instance %s",
@@ -129,7 +135,7 @@ int rrd_beatfunc(struct nv_sens *s) {
 
 	/* loop through data sets and submit appropriate data to each storage
 	 * plugin */
-	rrd_time = rrd_get_ts_utime(me->file);
+	rrd_time = rrd_get_ts_utime(s);
 	list_for_each(n, s->dsets) {
 		time_t ds_time = 0;
 		struct nv_dsts *d = node_data(struct nv_dsts, n);
@@ -143,8 +149,8 @@ int rrd_beatfunc(struct nv_sens *s) {
 		if (rrd_time > ds_time) {
 			/* we need to update the storage for this dataset, call
 			 * rrdtool to get data since last update */
-			snprintf(buf, BUF_LEN, "rrdtool fetch %s AVERAGE -s %i -e %i",
-					 me->file, ds_time, rrd_time);
+			snprintf(buf, BUF_LEN, "%s fetch %s AVERAGE -s %i -e %i",
+					 me->rrdtool, me->file, ds_time, rrd_time);
 			nv_log(LOG_DEBUG, "running cmd: %s", buf);
 			rrdout = popen(buf, "r");
 			fd = fileno(rrdout);
@@ -192,13 +198,17 @@ nextline:
 	return 0;
 }
 
-int rrd_get_ts_utime(char *f) {
+int rrd_get_ts_utime(struct nv_sens *s) {
 	FILE *rrdout = NULL;
 	char buf[BUF_LEN];
 	time_t utime = 0;
 	int c = 0;
+	struct rrd_data *me = NULL;
 
-	snprintf(buf, BUF_LEN, "rrdtool last %s", f);
+	/* get our local instance data */
+	me = (struct rrd_data *)s->data;
+
+	snprintf(buf, BUF_LEN, "%s last %s", me->rrdtool, me->file);
 	nv_log(LOG_DEBUG, "running cmd: %s", buf);
 	rrdout = popen(buf, "r");
 	c = fread(buf, 1, BUF_LEN-1, rrdout);

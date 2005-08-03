@@ -54,7 +54,7 @@ int net_listen() {
 	int sockfd = 0;
 	struct sockaddr_in addr;
 	int c_sockfd = 0;
-	int c_len = 0;
+	socklen_t c_len = 0;
 	struct sockaddr_in c_addr;
 	pthread_t *t = NULL;
 	pthread_attr_t attr;

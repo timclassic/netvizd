@@ -90,6 +90,12 @@ if (_nv_pth_status != 0) { \
 	nv_log(LOG_ERROR, "pthread_cond_signal()", _nv_pth_status); \
 	exit(PTHREAD_EXIT); \
 }
+#define nv_broadcast(c) \
+_nv_pth_status = pthread_cond_broadcast(c); \
+if (_nv_pth_status != 0) { \
+	nv_log(LOG_ERROR, "pthread_cond_broadcast()", _nv_pth_status); \
+		exit(PTHREAD_EXIT); \
+}
 static int _nv_pth_status;
 
 /*
