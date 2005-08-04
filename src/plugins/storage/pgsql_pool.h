@@ -29,16 +29,31 @@
 struct pgsql_pool {
 	int					num;          /* number of connections in the pool */
 	pthread_t *			thread;       /* management thread */
-	pthread_mutex_t *	lock;         /* pool read/write lock */
-	pthread_cond_t *	conn_avail;   /* "connection(s) available" condition */
-	pthread_cond_t *	quit;         /* "quit thread" condition */
-	int					num_free;     /* number of free connections */
-	int					num_inuse;    /* number of inuse connections */
+	int					quit;         /* quit flag */
+	
+	pthread_t *			logthread;    /* logging thread */
+	int					lastbad;      /* previous number of bad connections */
+	
+	/* bad list */
+	pthread_mutex_t *	bad_lock;     /* lock on bad list */
+	int					bad_num;      /* number of bad connections */
+	pthread_cond_t *	bad_avail;    /* "bad conn available" condition */
+	nv_list *			bad;          /* list of (struct pgsql_conn *) */
+	
+	/* free list */
+	pthread_mutex_t *	free_lock;    /* lock on free list */
+	int					free_num;     /* number of free connections */
+	pthread_cond_t *	free_avail;   /* "free conn available" condition */
 	nv_list *			free;         /* list of (struct pgsql_conn *) */
+	
+	/* in-use list */
+	pthread_mutex_t *   inuse_lock;   /* lock on in-use list */
+	int					inuse_num;    /* number of in-use connections */
 	nv_list *			inuse;        /* list of (struct pgsql_conn *) */
 };
 					
 struct pgsql_conn {
+	int				id;
 	PGconn *		conn;
 	nv_node			node;
 };
@@ -48,5 +63,11 @@ int pgsql_pool_init(struct nv_stor *s, int num);
 int pgsql_pool_free(struct nv_stor *s);
 struct pgsql_conn *pgsql_pool_get(struct nv_stor *s);
 void pgsql_pool_release(struct nv_stor *s, struct pgsql_conn *conn);
+
+#define pgsql_pool_conncheck(s, c, label) \
+	if (PQstatus((c)->conn) == CONNECTION_BAD) { \
+		pgsql_pool_release((s), (c)); \
+		goto label; \
+	}
 
 #endif

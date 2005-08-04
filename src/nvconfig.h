@@ -133,7 +133,7 @@ struct nv_proto_p {
 
 	pthread_t *			thread;
 
-	int					(*listen)();
+	int					(*listen)(struct nv_proto_p *);
 };
 
 /* a loaded authentication plugin */

@@ -30,15 +30,14 @@ void *proto_thread(void *arg) {
 	struct nv_proto_p *p = (struct nv_proto_p *)arg;
 	int *stat = NULL;
 
-	nv_log(LOG_INFO, "work thread for proto instance %s starting", p->name);
+	nv_log(LOG_INFO, "%s: proto heartbeat thread starting", p->name);
 
 	stat = nv_calloc(int, 1);
 	*stat = 0;
 
-	p->listen();
+	p->listen(p);
 
-	nv_log(LOG_INFO, "work thread for proto instance %s terminating",
-		   p->name);
+	nv_log(LOG_INFO, "%s: proto heartbeat thread stopping", p->name);
 	return (void *)stat;
 }
 

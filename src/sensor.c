@@ -39,7 +39,7 @@ void *sens_thread(void *arg) {
 	time_t now;
 	int *stat = NULL;
 
-	nv_log(LOG_INFO, "work thread for sensor instance %s starting", s->name);
+	nv_log(LOG_INFO, "%s: sensor heartbeat thread starting", s->name);
 
 	stat = nv_calloc(int, 1);
 
@@ -60,8 +60,7 @@ void *sens_thread(void *arg) {
 		usleep(THREAD_SLEEP);
 	}
 
-	nv_log(LOG_INFO, "work thread for sensor instance %s terminating",
-		   s->name);
+	nv_log(LOG_INFO, "%s: sensor heartbeat thread stopping", s->name);
 	return (void *)stat;
 }
 

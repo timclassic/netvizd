@@ -38,7 +38,7 @@ void *stor_thread(void *arg) {
 	time_t now;
 	int *stat = NULL;
 
-	nv_log(LOG_DEBUG, "work thread for storage instance %s starting", s->name);
+	nv_log(LOG_DEBUG, "%s: storage heartbeat thread starting", s->name);
 
 	stat = nv_calloc(int, 1);
 
@@ -58,8 +58,7 @@ void *stor_thread(void *arg) {
 		usleep(THREAD_SLEEP);
 	}
 
-	nv_log(LOG_DEBUG, "work thread for storage instance %s terminating",
-		   s->name);
+	nv_log(LOG_DEBUG, "%s: storage heartbeat thread stopping", s->name);
 	return (void *)stat;
 }
 

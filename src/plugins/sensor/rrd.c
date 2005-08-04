@@ -86,8 +86,8 @@ int rrd_inst_init(struct nv_sens *s) {
 		} else if (strncmp(c->key, "column", NAME_LEN) == 0) {
 			me->column = atoi(c->value);
 		} else {
-			nv_log(LOG_ERROR, "unknown key \"%s\" with value \"%s\"",
-				   c->key, c->value);
+			nv_log(LOG_ERROR, "%s: unknown key \"%s\" with value \"%s\"",
+				   s->name, c->key, c->value);
 			stat = -1;
 			goto cleanup;
 		}
@@ -99,8 +99,7 @@ int rrd_inst_init(struct nv_sens *s) {
 	}
 	if (me->file == NULL) {
 		stat = -1;
-		nv_log(LOG_ERROR, "file not specified for rrd plugin instance %s",
-			   s->name);
+		nv_log(LOG_ERROR, "%s: rrd file not specified", s->name);
 		goto cleanup;
 	}
 
@@ -151,7 +150,7 @@ int rrd_beatfunc(struct nv_sens *s) {
 			 * rrdtool to get data since last update */
 			snprintf(buf, BUF_LEN, "%s fetch %s AVERAGE -s %i -e %i",
 					 me->rrdtool, me->file, ds_time, rrd_time);
-			nv_log(LOG_DEBUG, "running cmd: %s", buf);
+			nv_log(LOG_DEBUG, "%s: running cmd: %s", s->name, buf);
 			rrdout = popen(buf, "r");
 			fd = fileno(rrdout);
 
@@ -177,8 +176,8 @@ nextline:
 						/* data value in our column */
 						if (strncmp("nan", word, 3) == 0) goto nextline;
 						value = atof(word);
-						nv_log(LOG_DEBUG, "adding time %i with value %f",
-							   vtime, value);
+						nv_log(LOG_DEBUG, "%s: adding time %i with value %f",
+							   s->name, vtime, value);
 						stor_submit_ts_data(d, vtime, value);
 						valid_vtime = vtime;
 						break;
@@ -209,7 +208,7 @@ int rrd_get_ts_utime(struct nv_sens *s) {
 	me = (struct rrd_data *)s->data;
 
 	snprintf(buf, BUF_LEN, "%s last %s", me->rrdtool, me->file);
-	nv_log(LOG_DEBUG, "running cmd: %s", buf);
+	nv_log(LOG_DEBUG, "%s: running cmd: %s", s->name, buf);
 	rrdout = popen(buf, "r");
 	c = fread(buf, 1, BUF_LEN-1, rrdout);
 	if (c > 0) {

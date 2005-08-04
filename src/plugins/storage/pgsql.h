@@ -25,22 +25,22 @@
 #include <pthread.h>
 #include "pgsql_pool.h"
 
-enum pgsql_stat {
-	PGSQL_DISCONNECTING,
-	PGSQL_DISCONNECTED,
-	PGSQL_CONNECTING,
-	PGSQL_CONNECTED
-};
-
 struct pgsql_data {
-	char *				host;
-	int					port;
-	char *				user;
-	char *				pass;
-	char *				db;
-	int					ssl;
-	enum pgsql_stat		stat;                   /* currently not used */
-	struct pgsql_pool	pool;
+	char *				host;       /* database server hostname */
+	int					port;       /* port number */
+	char *				user;       /* user name */
+	char *				pass;       /* password */
+	char *				db;         /* database name */
+	int					ctimeout;   /* connection timeout */
+	int					rtimeout;   /* retry timeout */
+	int					ssl;        /* use ssl? */
+	struct pgsql_pool	pool;       /* our connection pool */
+	
+	pthread_t *			thread;     /* maintenance thread */
+	pthread_mutex_t *	lock;       /* data lock */
+	pthread_cond_t *	readyc;     /* ready condition variables */
+	int					ready;      /* are we ready to work? */
+	int					quit;       /* are we ready to exit? */
 };
 
 #endif

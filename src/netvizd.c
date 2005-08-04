@@ -34,6 +34,7 @@
 #include <errno.h>
 #include <getopt.h>
 #include <pthread.h>
+#include <signal.h>
 
 /*
  * Global debug_mode
@@ -47,6 +48,7 @@ int main(int argc, char *argv[]) {
 	int stat = EXIT_SUCCESS;
 	nv_node i;
 	pthread_attr_t attr;
+	sigset_t newmask, oldmask;
 
 	strncpy(config_name, "file.la", NAME_LEN);
 	config_name[NAME_LEN-1] = '\0';
@@ -84,6 +86,16 @@ int main(int argc, char *argv[]) {
 	};
 
 	nv_log(LOG_INFO, "netvizd " VERSION " coming up");
+	
+    /* Block SIGPIPE for the daemon - if unblocked, some sockets will cause
+	 * a SIGPIPE to be delivered, screwing things up for us. */
+    sigemptyset(&newmask);
+    sigaddset(&newmask, SIGPIPE);
+    if (sigprocmask(SIG_BLOCK, &newmask, &oldmask) < 0) {
+		nv_perror(LOG_ERROR, "sigaddset()", errno);
+		stat = EXIT_FAILURE;
+		goto cleanup;
+    }
 	
 	/* set up plugin system */
 	if (nv_plugins_init() != 0) {

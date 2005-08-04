@@ -47,7 +47,7 @@ int proto_init(struct nv_proto_p *p) {
 }
 
 #define NET_PORT	12346
-int net_listen() {
+int net_listen(struct nv_proto_p *p) {
 	int stat = 0;
 	int ret = 0;
 	int opt = 0;
@@ -91,6 +91,8 @@ int net_listen() {
 		goto cleanup;
     }   
     /* set socket to listen */
+	nv_log(LOG_INFO, "%s: listening for connections on port %i", p->name,
+		   NET_PORT);
     ret = listen(sockfd, 5);
     if (0 > ret) {
         nv_perror(LOG_ERROR, "listen", errno);
@@ -123,15 +125,22 @@ cleanup:
 #define MSG_102		"102 Goodbye.\r\n"
 #define MSG_103		"103 %i %f %f %f\r\n"
 #define MSG_104		"104 FETCH command complete.\r\n"
+#define MSG_105		"105 %s %s\r\n"
+#define MSG_106		"106 %s\r\n"
+#define MSG_107		"107 ENUM command complete.\r\n"
 
 #define MSG_200		"200 Invalid request.\r\n"
 
 #define WORD_FETCH		"fetch"
 #define WORD_QUIT		"quit"
 #define WORD_EXIT		"exit"
+#define WORD_ENUM		"enum"
 
 #define invalid_query(fd)	writen((fd), MSG_200, strlen(MSG_200))
 
+/*
+ * This function is AWFUL.  We need to refactor it.
+ */
 void *client_thread(void *arg) {
 	int *fd = NULL;
 	int c = 0;
@@ -301,6 +310,35 @@ void *client_thread(void *arg) {
 			list_del(t);
 			nv_free(result);
 			writen(*fd, MSG_104, strlen(MSG_104));
+		} else if (strncmp(word, WORD_ENUM, strlen(WORD_ENUM)) == 0) {
+			nv_node i;
+			nv_node j;
+			struct nv_sys *sys;
+			struct nv_dsts *dsts;
+			
+			/* make sure there are no arguments */
+			word = strtok_r(NULL, sep, &brk);
+			if (word != NULL) {
+				invalid_query(*fd);
+				continue;
+			}
+			
+			/* send each system followed by its data sets */
+			list_for_each(i, &nv_sys_list) {
+				/* write system name and description */
+				sys = node_data(struct nv_sys, i);
+				snprintf(buf, BUF_LEN, MSG_105, sys->name, sys->desc);
+				writen(*fd, buf, strlen(buf));
+
+				list_for_each(j, &nv_dsts_list) {
+					dsts = node_data(struct nv_dsts, j);
+					if (dsts->sys == sys) {
+						snprintf(buf, BUF_LEN, MSG_106, dsts->name);
+						writen(*fd, buf, strlen(buf));
+					}
+				}
+			}
+			writen(*fd, MSG_107, strlen(MSG_107));
 		} else {
 			invalid_query(*fd);
 		}
