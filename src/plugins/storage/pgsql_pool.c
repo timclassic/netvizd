@@ -68,7 +68,7 @@ int pgsql_pool_init(struct nv_stor *s, int num) {
 	me->pool.thread = nv_calloc(pthread_t, 1);
 	ret = pthread_create(me->pool.thread, &attr, pgsql_pool_thread, s);
 	if (ret != 0) {
-		nv_perror(LOG_ERROR, "pthread_create()", ret);
+		nv_perror(NVLOG_ERROR, "pthread_create()", ret);
 		return EXIT_FAILURE;
 	}
 	
@@ -77,11 +77,11 @@ int pgsql_pool_init(struct nv_stor *s, int num) {
 	me->pool.logthread = nv_calloc(pthread_t, 1);
 	ret = pthread_create(me->pool.logthread, &attr, pgsql_pool_logthread, s);
 	if (ret != 0) {
-		nv_perror(LOG_ERROR, "pthread_create()", ret);
+		nv_perror(NVLOG_ERROR, "pthread_create()", ret);
 		return EXIT_FAILURE;
 	}
 	
-	return 0;	
+	return 0;
 }
 
 int pgsql_pool_free(struct nv_stor *s) {
@@ -93,6 +93,10 @@ int pgsql_pool_free(struct nv_stor *s) {
 	
 	/* indicate that we are to shut down the pool */
 	me->pool.quit = 1;
+	
+	/* wait for shutdown */
+	pthread_join(*me->pool.thread, NULL);
+	pthread_join(*me->pool.logthread, NULL);
 }
 
 static void *pgsql_pool_thread(void *arg) {
@@ -138,16 +142,14 @@ static void *pgsql_pool_thread(void *arg) {
 	nv_unlock(me->pool.bad_lock);
 	
 	/* begin connection repair */
-	nv_log(LOG_INFO, "%s: pool repair thread starting", s->name);
+	nv_log(NVLOG_INFO, "%s: pool repair thread starting", s->name);
 	for (;;) {
 		/* wait for there to be bad connections */
 		nv_lock(me->pool.bad_lock);
 		while (me->pool.bad_num == 0) {
 			timeout.tv_sec = time(NULL) + 1;
 			timeout.tv_nsec = 0;
-			ret = pthread_cond_timedwait(me->pool.bad_avail, me->pool.bad_lock,
-								   &timeout);
-			if (ret == ETIMEDOUT) {
+			nv_timedwait(me->pool.bad_avail, me->pool.bad_lock, &timeout) {
 				if (me->pool.quit) {
 					nv_unlock(me->pool.bad_lock);
 					goto cleanup;
@@ -168,20 +170,20 @@ retry:
 		if (NULL == c->conn) {
 			/* new connection, never before initialized */
 			if (!init_report && !fail_report) {
-				nv_log(LOG_WARN, "%s: starting pool initialization", s->name);
+				nv_log(NVLOG_INFO, "%s: starting pool initialization", s->name);
 				init_report = 1;
 			}
-			nv_log(LOG_DEBUG, "%s: attempting a new connection", s->name);
+			nv_log(NVLOG_DEBUG, "%s: attempting a new connection", s->name);
 			c->conn = pgsql_connect(s);
 		} else {
 			/* this connection needs repair */
 			if (!fail_report && !init_report) {
-				nv_log(LOG_WARN, "%s: failed connections exist in pool, "
+				nv_log(NVLOG_WARN, "%s: failed connections exist in pool, "
 					   "running repair attempts every %i seconds", s->name,
 					   me->rtimeout);
 				fail_report = 1;
 			}
-			nv_log(LOG_DEBUG, "%s: attempting a connection reset", s->name);
+			nv_log(NVLOG_DEBUG, "%s: attempting a connection reset", s->name);
 			PQreset(c->conn);
 		}
 		if (me->pool.quit) goto cleanup;
@@ -189,14 +191,14 @@ retry:
 		/* did the connection succeed?  If not, retry */
 		switch (PQstatus(c->conn)) {
 			case CONNECTION_OK:
-				nv_log(LOG_DEBUG, "%s: connection id %i successful", s->name,
+				nv_log(NVLOG_DEBUG, "%s: connection id %i successful", s->name,
 					   c->id);
 				if (fail_report && me->pool.bad_num == 0) {
-					nv_log(LOG_INFO, "%s: all connections in pool are up, "
+					nv_log(NVLOG_WARN, "%s: all connections in pool are up, "
 						   "finished with repair", s->name);
 					fail_report = 0;
 				} else if (init_report && me->pool.bad_num == 0) {
-					nv_log(LOG_INFO, "%s: all connections in pool are up, "
+					nv_log(NVLOG_INFO, "%s: all connections in pool are up, "
 						   "finished with pool initialization", s->name);
 					init_report = 0;
 				}
@@ -206,9 +208,9 @@ retry:
 			case CONNECTION_BAD:
 				buf = strdup(PQerrorMessage(c->conn));
 				buf[strlen(buf)-1] = '\0';
-				nv_log(LOG_DEBUG, "%s: connection failed: %s", s->name, buf);
+				nv_log(NVLOG_DEBUG, "%s: connection failed: %s", s->name, buf);
 				free(buf);
-				nv_log(LOG_DEBUG, "%s: database connection id %i failed, "
+				nv_log(NVLOG_DEBUG, "%s: database connection id %i failed, "
 					   "resuming repair in %i seconds", s->name, c->id,
 					   me->rtimeout);
 				sleep(me->rtimeout);
@@ -228,7 +230,7 @@ retry:
 	}
 
 cleanup:
-	nv_log(LOG_INFO, "%s: pool repair thread stopping", s->name);
+	nv_log(NVLOG_INFO, "%s: pool repair thread stopping", s->name);
 
 	/* release our connections */
 	nv_lock(me->pool.free_lock);
@@ -277,16 +279,27 @@ struct pgsql_conn *pgsql_pool_get(struct nv_stor *s) {
 	struct pgsql_data *me = NULL;
 	struct pgsql_conn *c = NULL;
 	nv_node n;
+	struct timespec timeout;
 	
 	me = (struct pgsql_data *)s->data;
+	
+	/* check and see if we're invalid at this point */
+	if (me->pool.quit) goto cleanup;
 	
 	/* wait for a connection to become available and grab one */
 retry:
 	nv_lock(me->pool.free_lock);
 	while (me->pool.free_num == 0) {
-		nv_log(LOG_DEBUG, "%s: no free connections in pool, waiting...",
+		nv_log(NVLOG_DEBUG, "%s: no free connections in pool, waiting...",
 			   s->name);
-		nv_wait(me->pool.free_avail, me->pool.free_lock);
+		timeout.tv_sec = time(NULL) + 1;
+		timeout.tv_nsec = 0;
+		nv_timedwait(me->pool.free_avail, me->pool.free_lock, &timeout) {
+			if (me->pool.quit) {
+				nv_unlock(me->pool.free_lock);
+				goto cleanup;
+			}
+		}
 	}
 	n = me->pool.free->next;
 	c = node_data(struct pgsql_conn, n);
@@ -306,7 +319,7 @@ retry:
 		nv_signal(me->pool.bad_avail);
 		nv_unlock(me->pool.bad_lock);
 		
-		nv_log(LOG_DEBUG, "%s: marked connection id %i bad", s->name, c->id);
+		nv_log(NVLOG_DEBUG, "%s: marked connection id %i bad", s->name, c->id);
 		goto retry;
 	}
 	
@@ -319,8 +332,9 @@ retry:
 	me->pool.inuse_num++;
 	nv_unlock(me->pool.inuse_lock);
 	
-	nv_log(LOG_DEBUG, "%s: grabbed connection id %i", s->name, c->id);
+	nv_log(NVLOG_DEBUG, "%s: grabbed connection id %i", s->name, c->id);
 
+cleanup:
 	return c;
 }
 
@@ -329,7 +343,10 @@ void pgsql_pool_release(struct nv_stor *s, struct pgsql_conn *c) {
 	nv_node n;
 	
 	me = (struct pgsql_data *)s->data;
-	
+
+	/* check and see if we're invalid at this point */
+	if (me->pool.quit) goto cleanup;
+
 	/* remove from in-use list */
 	n = c->node;
 	nv_lock(me->pool.inuse_lock);
@@ -349,7 +366,7 @@ void pgsql_pool_release(struct nv_stor *s, struct pgsql_conn *c) {
 		nv_signal(me->pool.bad_avail);
 		nv_unlock(me->pool.bad_lock);
 		
-		nv_log(LOG_DEBUG, "%s: marked connection id %i bad", s->name, c->id);
+		nv_log(NVLOG_DEBUG, "%s: marked connection id %i bad", s->name, c->id);
 	} else {
 		/* add to free list */
 		nv_node_new(n);
@@ -361,8 +378,10 @@ void pgsql_pool_release(struct nv_stor *s, struct pgsql_conn *c) {
 		nv_signal(me->pool.free_avail);
 		nv_unlock(me->pool.free_lock);
 
-		nv_log(LOG_DEBUG, "%s: released connection id %i", s->name, c->id);
+		nv_log(NVLOG_DEBUG, "%s: released connection id %i", s->name, c->id);
 	}
+cleanup:
+	;;
 }
 
 PGconn *pgsql_connect(struct nv_stor *s) {
@@ -397,35 +416,45 @@ static void pgsql_pool_status(struct nv_stor *s, int level) {
 static void *pgsql_pool_logthread(void *arg) {
 	struct nv_stor *s = NULL;
 	struct pgsql_data *me = NULL;
+	int badcount = 0;
 	
 	/* get typed pointers to our data */
 	s = (struct nv_stor *)arg;
 	me = (struct pgsql_data *)s->data;
 
 	/* initial report */
-	nv_log(LOG_INFO, "%s: pool logging thread starting", s->name);
-	pgsql_pool_status(s, LOG_INFO);
+	nv_log(NVLOG_INFO, "%s: pool logging thread starting", s->name);
+	pgsql_pool_status(s, NVLOG_INFO);
 	
-	/* log major changes in pool status */
+	/* log short-term major changes in pool status */
 	me->pool.lastbad = me->pool.bad_num;
 	for (;;) {
 		sleep(5);
 
 		/* report status if bad number changes */
 		if (me->pool.bad_num < me->pool.lastbad) {
-			pgsql_pool_status(s, LOG_INFO);
+			pgsql_pool_status(s, NVLOG_INFO);
 			me->pool.lastbad = me->pool.bad_num;
+			badcount++;
 		} else if (me->pool.bad_num > me->pool.lastbad) {
-			pgsql_pool_status(s, LOG_WARN);
+			pgsql_pool_status(s, NVLOG_INFO);
 			me->pool.lastbad = me->pool.bad_num;
+			badcount++;
 		}
 		
+		/* log long-term bad status every 15 minutes if there are bad entries */
+		if (me->pool.bad_num == 0) badcount = 0;
+		if (badcount >= 180) {
+			badcount = 0;
+			pgsql_pool_status(s, NVLOG_WARN);
+		}
+
 		/* check for exit */
 		if (me->pool.quit) break;
 	}
 	
 	/* final report */
-	pgsql_pool_status(s, LOG_INFO);
-	nv_log(LOG_INFO, "%s: pool logging thread stopping", s->name);
+	pgsql_pool_status(s, NVLOG_INFO);
+	nv_log(NVLOG_INFO, "%s: pool logging thread stopping", s->name);
 }
 

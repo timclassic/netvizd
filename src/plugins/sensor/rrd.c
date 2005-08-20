@@ -86,7 +86,7 @@ int rrd_inst_init(struct nv_sens *s) {
 		} else if (strncmp(c->key, "column", NAME_LEN) == 0) {
 			me->column = atoi(c->value);
 		} else {
-			nv_log(LOG_ERROR, "%s: unknown key \"%s\" with value \"%s\"",
+			nv_log(NVLOG_ERROR, "%s: unknown key \"%s\" with value \"%s\"",
 				   s->name, c->key, c->value);
 			stat = -1;
 			goto cleanup;
@@ -99,7 +99,7 @@ int rrd_inst_init(struct nv_sens *s) {
 	}
 	if (me->file == NULL) {
 		stat = -1;
-		nv_log(LOG_ERROR, "%s: rrd file not specified", s->name);
+		nv_log(NVLOG_ERROR, "%s: rrd file not specified", s->name);
 		goto cleanup;
 	}
 
@@ -150,7 +150,7 @@ int rrd_beatfunc(struct nv_sens *s) {
 			 * rrdtool to get data since last update */
 			snprintf(buf, BUF_LEN, "%s fetch %s AVERAGE -s %i -e %i",
 					 me->rrdtool, me->file, ds_time, rrd_time);
-			nv_log(LOG_DEBUG, "%s: running cmd: %s", s->name, buf);
+			nv_log(NVLOG_DEBUG, "%s: running cmd: %s", s->name, buf);
 			rrdout = popen(buf, "r");
 			fd = fileno(rrdout);
 
@@ -176,7 +176,7 @@ nextline:
 						/* data value in our column */
 						if (strncmp("nan", word, 3) == 0) goto nextline;
 						value = atof(word);
-						nv_log(LOG_DEBUG, "%s: adding time %i with value %f",
+						nv_log(NVLOG_DEBUG, "%s: adding time %i with value %f",
 							   s->name, vtime, value);
 						stor_submit_ts_data(d, vtime, value);
 						valid_vtime = vtime;
@@ -188,10 +188,13 @@ nextline:
 			pclose(rrdout);
 		}
 
-		/* store new updated time for data set... TODO This currently will
-		 * cause the above code to attempt to re-add the last value added
-		 * during this run when it is run next. */
-		stor_submit_ts_utime(d, valid_vtime);
+		/* Store new updated time for data set, but only if it's larger than
+		 * the previous updated time (this covers the case where we get no
+		 * output from rrdtool).
+		 * TODO (Is this still the case??) This currently will cause the above
+		 * code to attempt to re-add the last value added during this run when
+		 * it is run next. */
+		if (valid_vtime > ds_time) stor_submit_ts_utime(d, valid_vtime);
 	}
 	
 	return 0;
@@ -208,7 +211,7 @@ int rrd_get_ts_utime(struct nv_sens *s) {
 	me = (struct rrd_data *)s->data;
 
 	snprintf(buf, BUF_LEN, "%s last %s", me->rrdtool, me->file);
-	nv_log(LOG_DEBUG, "%s: running cmd: %s", s->name, buf);
+	nv_log(NVLOG_DEBUG, "%s: running cmd: %s", s->name, buf);
 	rrdout = popen(buf, "r");
 	c = fread(buf, 1, BUF_LEN-1, rrdout);
 	if (c > 0) {

@@ -76,8 +76,10 @@ static int pgsql_free(struct nv_stor_p *p) {
 }
 
 #define SQL_CREATE_META		"CREATE TABLE %s ( " \
-							"    name VARCHAR(256) PRIMARY KEY, " \
-							"    utime TIMESTAMP WITH TIME ZONE NOT NULL" \
+							"    system VARCHAR(256), " \
+							"    dataset VARCHAR(256), " \
+							"    utime TIMESTAMP WITH TIME ZONE NOT NULL, " \
+							"    PRIMARY KEY (system, dataset)" \
 							");"
 #define SQL_CREATE_DATA		"CREATE TABLE %s ( " \
 							"    system VARCHAR(256), " \
@@ -127,7 +129,7 @@ static int pgsql_inst_init(struct nv_stor *s) {
 				me->ssl = 0;
 			}
 		} else {
-			nv_log(LOG_ERROR, "unknown key \"%s\" with value \"%s\"",
+			nv_log(NVLOG_ERROR, "unknown key \"%s\" with value \"%s\"",
 				   c->key, c->value);
 			stat = -1;
 			goto cleanup;
@@ -137,19 +139,19 @@ static int pgsql_inst_init(struct nv_stor *s) {
 	/* check for missing information */
 	if (me->host == NULL) {
 		stat = -1;
-		nv_log(LOG_ERROR, "host not specified for pgsql plugin instance %s",
+		nv_log(NVLOG_ERROR, "host not specified for pgsql plugin instance %s",
 			   s->name);
 		goto cleanup;
 	}
 	if (me->user == NULL) {
 		stat = -1;
-		nv_log(LOG_ERROR, "user not specified for pgsql plugin instance %s",
+		nv_log(NVLOG_ERROR, "user not specified for pgsql plugin instance %s",
 			   s->name);
 		goto cleanup;
 	}
 	if (me->pass == NULL) {
 		stat = -1;
-		nv_log(LOG_ERROR, "pass not specified for pgsql plugin instance %s",
+		nv_log(NVLOG_ERROR, "pass not specified for pgsql plugin instance %s",
 			   s->name);
 		goto cleanup;
 	}
@@ -180,7 +182,7 @@ static int pgsql_inst_init(struct nv_stor *s) {
 	me->thread = nv_calloc(pthread_t, 1);
 	ret = pthread_create(me->thread, &attr, pgsql_thread, s);
 	if (ret != 0) {
-		nv_perror(LOG_ERROR, "pthread_create()", ret);
+		nv_perror(NVLOG_ERROR, "pthread_create()", ret);
 		stat = EXIT_FAILURE;
 	}
 	
@@ -190,15 +192,28 @@ cleanup:
 
 void pgsql_get_ready(struct nv_stor *s) {
 	struct pgsql_data *me = NULL;
-	
+	struct timespec timeout;
+
 	me = (struct pgsql_data *)s->data;
+	
+	if (me->quit) goto cleanup;
 	
 	/* wait for the ready signal */
 	nv_lock(me->lock);
 	while (!me->ready) {
-		nv_wait(me->readyc, me->lock);
+		timeout.tv_sec = time(NULL) + 1;
+		timeout.tv_nsec = 0;
+		nv_timedwait(me->readyc, me->lock, &timeout) {
+			if (me->quit) {
+				nv_unlock(me->lock);
+				break;
+			}
+		}
 	}
 	nv_unlock(me->lock);
+	
+cleanup:
+	;;
 }
 
 void *pgsql_thread(void *arg) {
@@ -209,12 +224,12 @@ void *pgsql_thread(void *arg) {
 	s = (struct nv_stor *)arg;
 	me = (struct pgsql_data *)s->data;
 	
-	nv_log(LOG_INFO, "%s: storage maintenance thread starting", s->name);
+	nv_log(NVLOG_INFO, "%s: storage maintenance thread starting", s->name);
 
 	/* init the nv_dsts table */
 	ret = pgsql_init_table(s, "nv_dsts", SQL_CREATE_META);
 	if (0 > ret) {
-		nv_log(LOG_ERROR, "error initializing table nv_dsts, aborting");
+		nv_log(NVLOG_ERROR, "error initializing table nv_dsts, aborting");
 		me->quit = 1;
 		goto cleanup;
 	}
@@ -222,7 +237,7 @@ void *pgsql_thread(void *arg) {
 	/* init the nv_dsts_data table */
 	ret = pgsql_init_table(s, "nv_dsts_data", SQL_CREATE_DATA);
 	if (0 > ret) {
-		nv_log(LOG_ERROR, "error initializing table nv_dsts, aborting");
+		nv_log(NVLOG_ERROR, "error initializing table nv_dsts, aborting");
 		me->quit = 1;
 		goto cleanup;
 	}
@@ -240,7 +255,7 @@ void *pgsql_thread(void *arg) {
 	}
 	
 cleanup:
-	nv_log(LOG_INFO, "%s: storage maintenance thread stopping", s->name);
+	nv_log(NVLOG_INFO, "%s: storage maintenance thread stopping", s->name);
 
 	pgsql_pool_free(s);
 	
@@ -278,7 +293,7 @@ int pgsql_stor_ts_data(struct nv_stor *s, char *dset, char *sys,
 retry:
 	res = pgsql_add_row(s, sys, dset, time, value);
 	if (0 > res) {
-//		nv_log(LOG_ERROR, "error writing values to table nv_dsts_data, "
+//		nv_log(NVLOG_ERROR, "error writing values to table nv_dsts_data, "
 //			   "aborting");
 		stat = -1;
 		goto cleanup;
@@ -320,6 +335,7 @@ nv_list *pgsql_get_ts_data(struct nv_stor *s, char *dset, char *sys,
 	buf[NAME_LEN-1] = '\0';
 retry:
 	c = pgsql_pool_get(s);
+	if (c == NULL) goto cleanup;
 	result = PQexec(c->conn, buf);
 	pgsql_pool_conncheck(s, c, retry);
 	status = PQresultStatus(result);
@@ -329,9 +345,10 @@ retry:
 			break;
 
 		default:
-			nv_log(LOG_ERROR, "libpq: %s", PQresultErrorMessage(result));
+			nv_log(NVLOG_ERROR, "%s: libpq: %s", s->name,
+				   PQresultErrorMessage(result));
 			stat = -1;
-			goto cleanup;
+			goto cleanup2;
 			break;
 	}
 
@@ -350,21 +367,23 @@ retry:
 		list_append(list, n);
 	}
 	
-cleanup:
+cleanup2:
 	PQclear(result);
 	pgsql_pool_release(s, c);
+	
+cleanup:
 	return list;
 }
 
 
-#define SQL_GET_UTIME		"SELECT name, EXTRACT(epoch FROM utime) " \
+#define SQL_GET_UTIME		"SELECT EXTRACT(epoch FROM utime) " \
 							"FROM nv_dsts " \
-							"WHERE name = '%s';"
-#define SQL_ADD_UTIME		"INSERT INTO nv_dsts ( name, utime ) " \
-							"VALUES ( '%s', '%s' );"
+							"WHERE system = '%s' and dataset = '%s';"
+#define SQL_ADD_UTIME		"INSERT INTO nv_dsts ( system, dataset, utime ) " \
+							"VALUES ( '%s', '%s', '%s' );"
 #define SQL_UPDATE_UTIME	"UPDATE nv_dsts " \
 							"SET utime = '%s' " \
-							"WHERE name = '%s';"
+							"WHERE system = '%s' and dataset = '%s';"
 
 int pgsql_stor_ts_utime(struct nv_stor *s, char *dset, char *sys,
 							   time_t time) {
@@ -372,21 +391,17 @@ int pgsql_stor_ts_utime(struct nv_stor *s, char *dset, char *sys,
 	int stat = 0;
 	int ret = 0;
 	PGresult *res = NULL;
-	char tname[NAME_LEN];
 	char buf[NAME_LEN];
 	char tbuf[26];
 	
 	pgsql_get_ready(s);
 
-	/* get the table name */
-	snprintf(tname, NAME_LEN, "dsts_%s_%s", sys, dset);
-	buf[NAME_LEN-1] = '\0';
-
 	/* see if we already have a value for the update time */
-	snprintf(buf, NAME_LEN, SQL_GET_UTIME, tname);
+	snprintf(buf, NAME_LEN, SQL_GET_UTIME, sys, dset);
 	buf[NAME_LEN-1] = '\0';
 retry:
 	c = pgsql_pool_get(s);
+	if (c == NULL) goto cleanup;
 	res = PQexec(c->conn, buf);
 	pgsql_pool_conncheck(s, c, retry);
 	switch(PQresultStatus(res)) {
@@ -395,19 +410,20 @@ retry:
 			break;
 
 		default:
-			nv_log(LOG_ERROR, "libpq: %s", PQresultErrorMessage(res));
+			nv_log(NVLOG_ERROR, "%s: libpq: %s", s->name,
+				   PQresultErrorMessage(res));
 			stat = -1;
-			goto cleanup;
+			goto cleanup2;
 			break;
 	}
 	ctime_r(&time, tbuf);
 	if (PQntuples(res) < 1) {
 		/* we need to add a new row for the update time */
-		snprintf(buf, NAME_LEN, SQL_ADD_UTIME, tname, tbuf);
+		snprintf(buf, NAME_LEN, SQL_ADD_UTIME, sys, dset, tbuf);
 		buf[NAME_LEN-1] = '\0';
 	} else {
 		/* we need to update the existing row */
-		snprintf(buf, NAME_LEN, SQL_UPDATE_UTIME, tbuf, tname);
+		snprintf(buf, NAME_LEN, SQL_UPDATE_UTIME, tbuf, sys, dset);
 		buf[NAME_LEN-1] = '\0';
 	}
 	PQclear(res);
@@ -416,6 +432,7 @@ retry:
 	/* run the SQL */
 retry2:
 	c = pgsql_pool_get(s);
+	if (c == NULL) goto cleanup;
 	res = PQexec(c->conn, buf);
 	pgsql_pool_conncheck(s, c, retry2);
 	switch(PQresultStatus(res)) {
@@ -424,15 +441,18 @@ retry2:
 			break;
 
 		default:
-			nv_log(LOG_ERROR, "libpq: %s", PQresultErrorMessage(res));
+			nv_log(NVLOG_ERROR, "%s: libpq: %s", s->name,
+				   PQresultErrorMessage(res));
 			stat = -1;
-			goto cleanup;
+			goto cleanup2;
 			break;
 	}
 
-cleanup:
+cleanup2:
 	PQclear(res);
 	pgsql_pool_release(s, c);
+	
+cleanup:
 	return stat;
 }
 
@@ -441,38 +461,29 @@ time_t pgsql_get_ts_utime(struct nv_stor *s, char *dset, char *sys) {
 	time_t utime = 0;
 	int ret = 0;
 	PGresult *res = NULL;
-	char tname[NAME_LEN];
 	char buf[NAME_LEN];
 	char tbuf[26];
 	char *resval = NULL;
 
 	pgsql_get_ready(s);
 
-	ret = pgsql_init_table(s, "nv_dsts", SQL_CREATE_META);
-	if (0 > ret) {
-		nv_log(LOG_ERROR, "error initializing table nv_dsts, aborting");
-		utime = -1;
-		goto cleanup;
-	}
-
-	/* get the table name */
-	snprintf(tname, NAME_LEN, "dsts_%s_%s", sys, dset);
-	buf[NAME_LEN-1] = '\0';
-
 	/* get the value for the update time */
-	snprintf(buf, NAME_LEN, SQL_GET_UTIME, tname);
+	snprintf(buf, NAME_LEN, SQL_GET_UTIME, sys, dset);
 retry:
 	c = pgsql_pool_get(s);
+	if (c == NULL) goto cleanup;
 	buf[NAME_LEN-1] = '\0';
 	res = PQexec(c->conn, buf);
 	pgsql_pool_conncheck(s, c, retry);
+	if (c == NULL) goto cleanup;
 	switch(PQresultStatus(res)) {
 		case PGRES_TUPLES_OK:
 			/* do nothing, we're OK */
 			break;
 
 		default:
-			nv_log(LOG_ERROR, "libpq: %s", PQresultErrorMessage(res));
+			nv_log(NVLOG_ERROR, "%s: libpq: %s", s->name,
+				   PQresultErrorMessage(res));
 			utime = -1;
 			goto cleanup2;
 			break;
@@ -484,7 +495,7 @@ retry:
 		utime = 0;
 	} else {
 		/* get the time value to return */
-		resval = PQgetvalue(res, 0, 1);
+		resval = PQgetvalue(res, 0, 0);
 		utime = atoi(resval);
 	}
 
@@ -513,8 +524,11 @@ int pgsql_init_table(struct nv_stor *s, char *table, char *sql) {
 	int stat = 0;
 	struct pgsql_conn *c = NULL;
 	
+	nv_log(NVLOG_DEBUG, "%s: initializing table: %s", s->name, table);
+	
 retry:
 	c = pgsql_pool_get(s);
+	if (c == NULL) goto cleanup;
 	params[0] = table;
 	res = PQexecParams(c->conn, SQL_TABLE_EXISTS, NUM_TABLE_EXISTS, types,
 					   params, NULL, NULL, 0);
@@ -525,9 +539,10 @@ retry:
 			break;
 
 		default:	
-			nv_log(LOG_ERROR, "libpq: %s", PQresultErrorMessage(res));
+			nv_log(NVLOG_ERROR, "%s: libpq: %s", s->name,
+				   PQresultErrorMessage(res));
 			stat = -1;
-			goto cleanup;
+			goto cleanup2;
 			break;
 	}
 	if (PQntuples(res) < 1) {
@@ -543,16 +558,19 @@ retry:
 				break;
 
 			default:
-				nv_log(LOG_ERROR, "libpq: %s", PQresultErrorMessage(res));
+				nv_log(NVLOG_ERROR, "%s: libpq: %s", s->name,
+					   PQresultErrorMessage(res));
 				stat = -1;
-				goto cleanup;
+				goto cleanup2;
 				break;
 		}
 	}
 
-cleanup:
+cleanup2:
 	PQclear(res);
 	pgsql_pool_release(s, c);
+	
+cleanup:
 	return stat;
 }
 
@@ -575,6 +593,7 @@ int pgsql_add_row(struct nv_stor *s, char *system, char *dataset, time_t time,
 	buf[NAME_LEN-1] = '\0';
 retry:
 	c = pgsql_pool_get(s);
+	if (c == NULL) goto cleanup;
 	res = PQexec(c->conn, buf);
 	pgsql_pool_conncheck(s, c, retry);
 	switch(PQresultStatus(res)) {
@@ -583,15 +602,18 @@ retry:
 			break;
 
 		default:
-//			nv_log(LOG_ERROR, "libpq: %s", PQresultErrorMessage(res));
+			nv_log(NVLOG_ERROR, "%s: libpq: %s", s->name,
+				   PQresultErrorMessage(res));
 			stat = -1;
-			goto cleanup;
+			goto cleanup2;
 			break;
 	}
 
-cleanup:
+cleanup2:
 	PQclear(res);
 	pgsql_pool_release(s, c);
+	
+cleanup:
 	return stat;
 }
 

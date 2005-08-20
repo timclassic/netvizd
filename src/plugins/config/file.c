@@ -55,12 +55,12 @@ int config_init(struct nv_config_p *p) {
 	p->free = file_free;
 
 	/* read in our config file */
-	nv_log(LOG_INFO, "reading config file from " SYSCONFDIR "/netvizd.conf");
+	nv_log(NVLOG_INFO, "reading config file from " SYSCONFDIR "/netvizd.conf");
 	cfile = fopen(SYSCONFDIR "/netvizd.conf", "r");
 	yyin = cfile;
 	ret = begin_parse();
 	if (ret != 0) {
-		nv_log(LOG_ERROR, "configuration file parse failed");
+		nv_log(NVLOG_ERROR, "configuration file parse failed");
 		stat = -1;
 		goto cleanup;
 	}
@@ -71,7 +71,7 @@ int config_init(struct nv_config_p *p) {
 	 * and data sets. */
 	ret = create_conf();
 	if (ret != 0) {
-		nv_log(LOG_ERROR, "configuration failed");
+		nv_log(NVLOG_ERROR, "configuration failed");
 		stat = -1;
 		goto cleanup;
 	}
@@ -95,10 +95,10 @@ int file_free(struct nv_config_p *p) {
 void add_plugin(struct global_plugin *p) {
 	nv_node n = NULL;
 
-	nv_log(LOG_DEBUG, "Adding plugin to internal list:");
-	nv_log(LOG_DEBUG, "    name: %s", p->name);
-	nv_log(LOG_DEBUG, "    type: %i", p->type);
-	nv_log(LOG_DEBUG, "    file: %s", p->file);
+	nv_log(NVLOG_DEBUG, "Adding plugin to internal list:");
+	nv_log(NVLOG_DEBUG, "    name: %s", p->name);
+	nv_log(NVLOG_DEBUG, "    type: %i", p->type);
+	nv_log(NVLOG_DEBUG, "    file: %s", p->file);
 	nv_node_new(n);
 	set_node_data(n, p);
 	list_append(&file_plug_list, n);
@@ -112,14 +112,14 @@ void add_storage(struct global_storage *s) {
 	nv_node n;
 	nv_node i;
 
-	nv_log(LOG_DEBUG, "Adding storage definition to internal list:");
-	nv_log(LOG_DEBUG, "    name: %s", s->name);
-	nv_log(LOG_DEBUG, "    plugin name: %s", s->p_name);
-	nv_log(LOG_DEBUG, "    values:");
+	nv_log(NVLOG_DEBUG, "Adding storage definition to internal list:");
+	nv_log(NVLOG_DEBUG, "    name: %s", s->name);
+	nv_log(NVLOG_DEBUG, "    plugin name: %s", s->p_name);
+	nv_log(NVLOG_DEBUG, "    values:");
 	list_for_each(i, s->values) {
 		struct values *v = NULL;
 		v = node_data(struct values, i);
-		nv_log(LOG_DEBUG, "        %s, %s", v->word, v->value);
+		nv_log(NVLOG_DEBUG, "        %s, %s", v->word, v->value);
 	}
 
 	nv_node_new(n);
@@ -135,14 +135,14 @@ void add_sensor(struct global_sensor *s) {
 	nv_node n;
 	nv_node i;
 	
-	nv_log(LOG_DEBUG, "Adding sensor definition to internal list:");
-	nv_log(LOG_DEBUG, "    name: %s", s->name);
-	nv_log(LOG_DEBUG, "    plugin name: %s", s->p_name);
-	nv_log(LOG_DEBUG, "    values:");
+	nv_log(NVLOG_DEBUG, "Adding sensor definition to internal list:");
+	nv_log(NVLOG_DEBUG, "    name: %s", s->name);
+	nv_log(NVLOG_DEBUG, "    plugin name: %s", s->p_name);
+	nv_log(NVLOG_DEBUG, "    values:");
 	list_for_each(i, s->values) {
 		struct values *v = NULL;
 		v = node_data(struct values, i);
-		nv_log(LOG_DEBUG, "        %s, %s", v->word, v->value);
+		nv_log(NVLOG_DEBUG, "        %s, %s", v->word, v->value);
 	}
 	nv_node_new(n);
 	set_node_data(n, s);
@@ -159,14 +159,14 @@ void add_sensor(struct global_sensor *s) {
 void add_data_set(struct data_set *d) {
 	nv_node n;
 
-	nv_log(LOG_DEBUG, "Adding data set to internal list:");
-	nv_log(LOG_DEBUG, "    name: %s", d->name);
-	nv_log(LOG_DEBUG, "    description: %s", d->desc);
-	nv_log(LOG_DEBUG, "    type: %i", d->type);
-	nv_log(LOG_DEBUG, "    cf: %i", d->cf);
-	nv_log(LOG_DEBUG, "    sensor: %s", d->sensor);
-	nv_log(LOG_DEBUG, "    storage: %s", d->storage);
-	nv_log(LOG_DEBUG, "    system: %s", d->system);
+	nv_log(NVLOG_DEBUG, "Adding data set to internal list:");
+	nv_log(NVLOG_DEBUG, "    name: %s", d->name);
+	nv_log(NVLOG_DEBUG, "    description: %s", d->desc);
+	nv_log(NVLOG_DEBUG, "    type: %i", d->type);
+	nv_log(NVLOG_DEBUG, "    cf: %i", d->cf);
+	nv_log(NVLOG_DEBUG, "    sensor: %s", d->sensor);
+	nv_log(NVLOG_DEBUG, "    storage: %s", d->storage);
+	nv_log(NVLOG_DEBUG, "    system: %s", d->system);
 	nv_node_new(n);
 	set_node_data(n, d);
 	list_append(&file_dset_list, n);
@@ -180,9 +180,9 @@ void add_data_set(struct data_set *d) {
 void add_system(struct system *s) {
 	nv_node n;
 
-	nv_log(LOG_DEBUG, "Adding system to internal list:");
-	nv_log(LOG_DEBUG, "    name: %s", s->name);
-	nv_log(LOG_DEBUG, "    description: %s", s->desc);
+	nv_log(NVLOG_DEBUG, "Adding system to internal list:");
+	nv_log(NVLOG_DEBUG, "    name: %s", s->name);
+	nv_log(NVLOG_DEBUG, "    description: %s", s->desc);
 	nv_node_new(n);
 	set_node_data(n, s);
 	list_append(&file_sys_list, n);
@@ -220,12 +220,12 @@ int create_conf() {
 		f = node_data(struct global_plugin, i);
 		
 		if (f->file == NULL) {
-			nv_log(LOG_ERROR, "file not specified for plugin %s", f->name);
+			nv_log(NVLOG_ERROR, "file not specified for plugin %s", f->name);
 			stat = -1;
 		}
 		switch (f->type) {
 			case p_type_none:
-				nv_log(LOG_ERROR, "type not specified for plugin %s",
+				nv_log(NVLOG_ERROR, "type not specified for plugin %s",
 					   f->name);
 				stat = -1;
 				break;
@@ -315,7 +315,7 @@ int create_conf() {
 			}
 		}
 		if (err != 0) {
-			nv_log(LOG_ERROR, "no storage plugin definition found with "
+			nv_log(NVLOG_ERROR, "no storage plugin definition found with "
 				   "name %s", f->p_name);
 			stat = -1;
 		}
@@ -372,7 +372,7 @@ int create_conf() {
 			}
 		}
 		if (err != 0) {
-			nv_log(LOG_ERROR, "no sensor plugin definition found with "
+			nv_log(NVLOG_ERROR, "no sensor plugin definition found with "
 				   "name %s", f->p_name);
 			stat = -1;
 		}
@@ -418,7 +418,7 @@ int create_conf() {
 		ds->type = f->type;
 		ds->cf = f->cf;
 		if (ds->type == ds_type_none) {
-			nv_log(LOG_ERROR, "type not specified for data set %s",
+			nv_log(NVLOG_ERROR, "type not specified for data set %s",
 				   ds->name);
 			stat = -1;
 		}
@@ -438,7 +438,7 @@ int create_conf() {
 				}
 			}
 			if (err != 0) {
-				nv_log(LOG_ERROR, "no sensor instance definition found with "
+				nv_log(NVLOG_ERROR, "no sensor instance definition found with "
 					   "name %s", f->sensor);
 				stat = -1;
 			}
@@ -459,12 +459,12 @@ int create_conf() {
 				}
 			}
 			if (err != 0) {
-				nv_log(LOG_ERROR, "no storage instance definition found with "
+				nv_log(NVLOG_ERROR, "no storage instance definition found with "
 					   "name %s", f->storage);
 				stat = -1;
 			}
 		} else {
-			nv_log(LOG_ERROR, "no storage instance specified for data set %s",
+			nv_log(NVLOG_ERROR, "no storage instance specified for data set %s",
 				   ds->name);
 			stat = -1;
 		}
@@ -480,7 +480,7 @@ int create_conf() {
 			}
 		}
 		if (err != 0) {
-			nv_log(LOG_ERROR, "internal parsing error, no system found with "
+			nv_log(NVLOG_ERROR, "internal parsing error, no system found with "
 				   "name %s", f->system);
 			stat = -1;
 		}

@@ -69,31 +69,37 @@
 #define nv_lock(m) \
 _nv_pth_status = pthread_mutex_lock(m); \
 if (_nv_pth_status != 0) { \
-	nv_log(LOG_ERROR, "pthread_mutex_lock()", _nv_pth_status); \
+	nv_log(NVLOG_ERROR, "pthread_mutex_lock()", _nv_pth_status); \
 	exit(PTHREAD_EXIT); \
 }
 #define nv_unlock(m) \
 _nv_pth_status = pthread_mutex_unlock(m); \
 if (_nv_pth_status != 0) { \
-	nv_log(LOG_ERROR, "pthread_mutex_unlock()", _nv_pth_status); \
+	nv_log(NVLOG_ERROR, "pthread_mutex_unlock()", _nv_pth_status); \
 	exit(PTHREAD_EXIT); \
 }
 #define nv_wait(c, m) \
-_nv_pth_status = pthread_cond_wait(c, m); \
+_nv_pth_status = pthread_cond_wait((c), (m)); \
 if (_nv_pth_status != 0) { \
-	nv_log(LOG_ERROR, "pthread_cond_wait()", _nv_pth_status); \
+	nv_log(NVLOG_ERROR, "pthread_cond_wait()", _nv_pth_status); \
 	exit(PTHREAD_EXIT); \
 }
+#define nv_timedwait(c, m, t) \
+_nv_pth_status = pthread_cond_timedwait((c), (m), (t)); \
+if (_nv_pth_status != 0 && _nv_pth_status != ETIMEDOUT) { \
+	nv_log(NVLOG_ERROR, "pthread_cond_timedwait()", _nv_pth_status); \
+		exit(PTHREAD_EXIT); \
+} else if (_nv_pth_status == ETIMEDOUT)
 #define nv_signal(c) \
 _nv_pth_status = pthread_cond_signal(c); \
 if (_nv_pth_status != 0) { \
-	nv_log(LOG_ERROR, "pthread_cond_signal()", _nv_pth_status); \
+	nv_log(NVLOG_ERROR, "pthread_cond_signal()", _nv_pth_status); \
 	exit(PTHREAD_EXIT); \
 }
 #define nv_broadcast(c) \
 _nv_pth_status = pthread_cond_broadcast(c); \
 if (_nv_pth_status != 0) { \
-	nv_log(LOG_ERROR, "pthread_cond_broadcast()", _nv_pth_status); \
+	nv_log(NVLOG_ERROR, "pthread_cond_broadcast()", _nv_pth_status); \
 		exit(PTHREAD_EXIT); \
 }
 static int _nv_pth_status;
@@ -123,11 +129,14 @@ static int _nv_pth_status;
 /*
  * Logging templates
  */
-#define LOG_DEBUG_MSG		"[debug|%%s:%%d]: %s\n"
-#define LOG_INFO_MSG		" [info|%%s:%%d]: %s\n"
-#define LOG_WARN_MSG		" [warn|%%s:%%d]: %s\n"
-#define LOG_ERROR_MSG		"[error|%%s:%%d]: %s\n"
-#define LOG_POSITION		__FILE__, __LINE__
+#define NVLOGD_DEBUG_MSG	"[debug|%%s:%%d]: %s"
+#define NVLOGD_INFO_MSG		" [info|%%s:%%d]: %s"
+#define NVLOG_INFO_MSG		" [info]: %s"
+#define NVLOGD_WARN_MSG		" [warn|%%s:%%d]: %s"
+#define NVLOG_WARN_MSG		" [warn]: %s"
+#define NVLOGD_ERROR_MSG	"[error|%%s:%%d]: %s"
+#define NVLOG_ERROR_MSG		"[error]: %s"
+#define NVLOG_POSITION		__FILE__, __LINE__
 
 BEGIN_C_DECLS;
 
@@ -135,21 +144,24 @@ BEGIN_C_DECLS;
  * Logging interface
  */
 typedef enum {
-	LOG_DEBUG,
-	LOG_INFO,
-	LOG_WARN,
-	LOG_ERROR
+	NVLOG_DEBUG,
+	NVLOG_INFO,
+	NVLOG_WARN,
+	NVLOG_ERROR
 } log_type_t;
 
 void _nv_log(log_type_t type, char *message, ...);
 void _nv_perror(log_type_t type, char *message, int error, char *file,
 				int line);
 #define nv_log(type, message, ...) \
-	_nv_log((type), (message), LOG_POSITION, ## __VA_ARGS__)
+	if (debug_mode) _nv_log((type), (message), NVLOG_POSITION, ## __VA_ARGS__); \
+	else _nv_log((type), (message), ## __VA_ARGS__)
 #define nv_perror(type, message, error) \
-	_nv_log((type), "%s: %s", LOG_POSITION, (message), strerror(error));
+	if (debug_mode) _nv_log((type), "%s: %s", NVLOG_POSITION, (message), strerror(error)); \
+	else _nv_log((type), "%s: %s", (message), strerror(error))
 #define nv_perror_r(type, message, error) \
-	_nv_perror_r((type), (message), (error), LOG_POSITION)
+	if (debug_mode) _nv_perror_r((type), (message), (error), NVLOG_POSITION); \
+	else _nv_perror_r((type), (message), (error))
 
 /*
  * Public interface for malloc() calls
@@ -159,6 +171,10 @@ extern void *_nv_malloc(size_t num);
 extern void *_nv_realloc(void *p, size_t num);
 
 END_C_DECLS;
+
+#ifndef NV_GLOBAL_MAIN
+extern int debug_mode;
+#endif /* NV_GLOBAL_MAIN */
 
 #endif
 /* vim: set ts=4 sw=4: */

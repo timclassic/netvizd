@@ -66,7 +66,7 @@ int net_listen(struct nv_proto_p *p) {
     /* get a socket */
     sockfd = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (0 > sockfd) {
-        nv_perror(LOG_ERROR, "socket", errno);
+        nv_perror(NVLOG_ERROR, "socket", errno);
         stat = -1;
 		goto cleanup;
     }
@@ -74,7 +74,7 @@ int net_listen(struct nv_proto_p *p) {
     opt = 1;
     ret = setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
     if (0 > ret) {
-        nv_perror(LOG_ERROR, "setsockopt", errno);
+        nv_perror(NVLOG_ERROR, "setsockopt", errno);
         stat = -1;
 		goto cleanup;
     }
@@ -86,16 +86,16 @@ int net_listen(struct nv_proto_p *p) {
     /* bind to local address */
     ret = bind(sockfd, (struct sockaddr *)&addr, sizeof(addr));
     if (0 > ret) { 
-        nv_perror(LOG_ERROR, "bind", errno);
+        nv_perror(NVLOG_ERROR, "bind", errno);
         stat = -1;
 		goto cleanup;
     }   
     /* set socket to listen */
-	nv_log(LOG_INFO, "%s: listening for connections on port %i", p->name,
+	nv_log(NVLOG_INFO, "%s: listening for connections on port %i", p->name,
 		   NET_PORT);
     ret = listen(sockfd, 5);
     if (0 > ret) {
-        nv_perror(LOG_ERROR, "listen", errno);
+        nv_perror(NVLOG_ERROR, "listen", errno);
         stat = -1;
 		goto cleanup;
     }
@@ -110,7 +110,7 @@ int net_listen(struct nv_proto_p *p) {
 		*fd = c_sockfd;
 		ret = pthread_create(t, &attr, client_thread, (void *)fd);
 		if (ret != 0) {
-			nv_perror(LOG_ERROR, "pthread_create", ret);
+			nv_perror(NVLOG_ERROR, "pthread_create", ret);
 			stat = -1;
 			nv_free(t);
 		}
@@ -270,7 +270,7 @@ void *client_thread(void *arg) {
 				 * skip - this is the time value we pick for submission */
 				if (res*60 <= diff) skip = 1;
 				else skip = res*60/diff;
-				nv_log(LOG_DEBUG, "Calculated skip of %i", skip);
+				nv_log(NVLOG_DEBUG, "Calculated skip of %i", skip);
 				if (skip == 1) skipt = 1;
 				else if (skip == 2) skipt = 1;
 				else skipt = skip/2+1;

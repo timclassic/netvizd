@@ -18,6 +18,8 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
+#define NV_GLOBAL_MAIN
+
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -35,11 +37,28 @@
 #include <getopt.h>
 #include <pthread.h>
 #include <signal.h>
+#include <syslog.h>
+
+static void print_usage(FILE *fp, char *cmd);
 
 /*
  * Global debug_mode
  */
 int debug_mode = 0;
+
+static int log_stdout = 0;
+static int forked = 0;
+
+void print_usage(FILE *fp, char *cmd) {
+	fprintf(fp, "Usage: %s [options]\n"
+				"Options:\n"
+				"  -c PLUGIN, --config=PLUGIN   Load a specific config plugin, default is 'file'.\n"
+				"  -d, --debug                  Output debug information.\n"
+				"  -f, --foreground             Run in foreground, do not fork.\n"
+				"  -h, --help                   Display usage information.\n"
+				"  -s, --stdout                 Log to stdout/stderr instead of using syslog().\n",
+			cmd);
+}
 
 int main(int argc, char *argv[]) {
 	int c = 0;
@@ -49,9 +68,15 @@ int main(int argc, char *argv[]) {
 	nv_node i;
 	pthread_attr_t attr;
 	sigset_t newmask, oldmask;
+	int foreground = 0;
+	pid_t pid = 0;
 
+	/* set option defaults */
 	strncpy(config_name, "file.la", NAME_LEN);
 	config_name[NAME_LEN-1] = '\0';
+	
+	/* do syslog initialization */
+	openlog("netvizd", 0, LOG_LOCAL1);
 
 	/* do cmd line processing */
 	for (;;) {
@@ -60,10 +85,13 @@ int main(int argc, char *argv[]) {
 		static struct option long_options[] = {
 			{"config", 1, 0, 'c'},
 			{"debug", 0, 0, 'd'},
+			{"foreground", 0, 0, 'f'},
+			{"stdout", 0, 0, 's'},
+			{"help", 0, 0, 'h'},
 			{0, 0, 0, 0}
 		};
 
-		c = getopt_long(argc, argv, "c:d", long_options, &option_index);
+		c = getopt_long(argc, argv, "c:dfsh", long_options, &option_index);
 		if (c == -1) break;
 
 		switch (c) {
@@ -75,38 +103,51 @@ int main(int argc, char *argv[]) {
 			case 'd':
 				debug_mode = 1;
 				break;
+				
+			case 'f':
+				foreground = 1;
+				break;
+				
+			case 's':
+				log_stdout = 1;
+				break;
+				
+			case 'h':
+				print_usage(stdout, argv[0]);
+				exit(EXIT_SUCCESS);
 
 			case '?':
 				break;
 
 			default:
-				fprintf(stderr, "getopt returned unknown character code\n");
+				print_usage(stderr, argv[0]);
+				exit(EXIT_FAILURE);
 				break;
 		};
 	};
-
-	nv_log(LOG_INFO, "netvizd " VERSION " coming up");
+	
+	nv_log(NVLOG_INFO, "netvizd " VERSION " coming up");
 	
     /* Block SIGPIPE for the daemon - if unblocked, some sockets will cause
 	 * a SIGPIPE to be delivered, screwing things up for us. */
     sigemptyset(&newmask);
     sigaddset(&newmask, SIGPIPE);
     if (sigprocmask(SIG_BLOCK, &newmask, &oldmask) < 0) {
-		nv_perror(LOG_ERROR, "sigaddset()", errno);
+		nv_perror(NVLOG_ERROR, "sigaddset()", errno);
 		stat = EXIT_FAILURE;
 		goto cleanup;
     }
 	
 	/* set up plugin system */
 	if (nv_plugins_init() != 0) {
-		nv_log(LOG_ERROR, "plugin initialization failed, aborting");
+		nv_log(NVLOG_ERROR, "plugin initialization failed, aborting");
 		stat = EXIT_FAILURE;
 		goto cleanup;
 	}
 
 	/* load our configuration from supplied plugin */
 	if (nv_config_init(config_name) != 0) {
-		nv_log(LOG_ERROR, "configuration plugin initialization failed, "
+		nv_log(NVLOG_ERROR, "configuration plugin initialization failed, "
 			   "aborting");
 		stat = EXIT_FAILURE;
 		goto cleanup;
@@ -114,22 +155,22 @@ int main(int argc, char *argv[]) {
 
 	/* load the rest of the plugins as per our configuration */
 	if (stor_p_init() != 0) {
-		nv_log(LOG_ERROR, "storage plugin initialization failed, aborting");
+		nv_log(NVLOG_ERROR, "storage plugin initialization failed, aborting");
 		stat = EXIT_FAILURE;
 		goto cleanup;
 	}
 	if (sens_p_init() != 0) {
-		nv_log(LOG_ERROR, "sensor plugin initialization failed, aborting");
+		nv_log(NVLOG_ERROR, "sensor plugin initialization failed, aborting");
 		stat = EXIT_FAILURE;
 		goto cleanup;
 	}
 	if (proto_p_init() != 0) {
-		nv_log(LOG_ERROR, "protocol plugin initialization failed, aborting");
+		nv_log(NVLOG_ERROR, "protocol plugin initialization failed, aborting");
 		stat = EXIT_FAILURE;
 		goto cleanup;
 	}
 	if (auth_p_init() != 0) {
-		nv_log(LOG_ERROR, "authentication plugin initialization failed, "
+		nv_log(NVLOG_ERROR, "authentication plugin initialization failed, "
 			   "aborting");
 		stat = EXIT_FAILURE;
 		goto cleanup;
@@ -140,7 +181,7 @@ int main(int argc, char *argv[]) {
 		struct nv_stor *s = node_data(struct nv_stor, i);
 		if (s->plug->inst_init == NULL) continue;
 		if (s->plug->inst_init(s) != 0) {
-			nv_log(LOG_ERROR, "storage instance initialization failed, "
+			nv_log(NVLOG_ERROR, "storage instance initialization failed, "
 				   "aborting");
 			stat = EXIT_FAILURE;
 			goto cleanup;
@@ -152,7 +193,7 @@ int main(int argc, char *argv[]) {
 		struct nv_sens *s = node_data(struct nv_sens, i);
 		if (s->plug->inst_init == NULL) continue;
 		if (s->plug->inst_init(s) != 0) {
-			nv_log(LOG_ERROR, "sensor instance initialization failed, "
+			nv_log(NVLOG_ERROR, "sensor instance initialization failed, "
 				   "aborting");
 			stat = EXIT_FAILURE;
 			goto cleanup;
@@ -171,7 +212,7 @@ int main(int argc, char *argv[]) {
 		s->thread = nv_calloc(pthread_t, 1);
 		ret = pthread_create(s->thread, &attr, stor_thread, s);
 		if (ret != 0) {
-			nv_perror(LOG_ERROR, "pthread_create()", ret);
+			nv_perror(NVLOG_ERROR, "pthread_create()", ret);
 			stat = EXIT_FAILURE;
 			goto cleanup;
 		}
@@ -186,7 +227,7 @@ int main(int argc, char *argv[]) {
 		s->thread = nv_calloc(pthread_t, 1);
 		ret = pthread_create(s->thread, &attr, sens_thread, s);
 		if (ret != 0) {
-			nv_perror(LOG_ERROR, "pthread_create()", ret);
+			nv_perror(NVLOG_ERROR, "pthread_create()", ret);
 			stat = EXIT_FAILURE;
 			goto cleanup;
 		}
@@ -202,7 +243,7 @@ int main(int argc, char *argv[]) {
 		p->thread = nv_calloc(pthread_t, 1);
 		ret = pthread_create(p->thread, &attr, proto_thread, p);
 		if (ret != 0) {
-			nv_perror(LOG_ERROR, "pthread_create()", ret);
+			nv_perror(NVLOG_ERROR, "pthread_create()", ret);
 			stat = EXIT_FAILURE;
 			goto cleanup;
 		}
@@ -210,6 +251,18 @@ int main(int argc, char *argv[]) {
 
 	/* do some thread startup cleanup */
 	pthread_attr_destroy(&attr);
+	
+	/* fork a new process if not in foreground mode */
+	if (!foreground) {
+		pid = fork();
+		if (pid < 0) {
+			nv_perror(NVLOG_ERROR, "fork()", errno);
+			exit(EXIT_FAILURE);
+		} else if (pid > 0)	{
+			exit(EXIT_SUCCESS);
+		}
+		forked = 1;
+	}
 
 	/* wait on all the threads */
 	list_for_each(i, &nv_stor_list) {
@@ -226,7 +279,8 @@ int main(int argc, char *argv[]) {
 	/* shut down */
 cleanup:
 	nv_plugins_free();
-	nv_log(LOG_INFO, "netvizd " VERSION " shutdown complete");
+	nv_log(NVLOG_INFO, "netvizd " VERSION " shutdown complete");
+	closelog();
 	return stat;
 }
 
@@ -236,7 +290,7 @@ cleanup:
 void *_nv_malloc(size_t num) {
 	void *new = (void *)malloc(num);
 	if (!new) {
-		nv_perror(LOG_ERROR, "malloc()", errno);
+		nv_perror(NVLOG_ERROR, "malloc()", errno);
 		exit(MALLOC_EXIT);
 	}
 	return new;
@@ -252,7 +306,7 @@ void *_nv_realloc(void *p, size_t num) {
 
 	new = (void *)realloc(p, num);
 	if (!new) {
-		nv_perror(LOG_ERROR, "realloc()", errno);
+		nv_perror(NVLOG_ERROR, "realloc()", errno);
 		exit(MALLOC_EXIT);
 	}
 	return new;
@@ -274,29 +328,65 @@ void _nv_log(log_type_t type, char *message, ...) {
 	va_list argv = NULL;
 	char *buf = NULL;
 	int len = 0;
+	int pri = LOG_INFO;
 
+	/* format message string */
 	len = BUF_LEN + strlen(message);
-	buf = nv_calloc(char, len);
+	buf = nv_calloc(char, len+1);
 	va_start(argv, message);
 	switch (type) {
-	case LOG_DEBUG:
-		if (debug_mode) snprintf(buf, len, LOG_DEBUG_MSG, message);
-		break;
-		
-	case LOG_INFO:
-		snprintf(buf, len, LOG_INFO_MSG, message);
-		break;
+		case NVLOG_DEBUG:
+			if (debug_mode) snprintf(buf, len, NVLOGD_DEBUG_MSG, message);
+			pri = LOG_DEBUG;
+			break;
+			
+		case NVLOG_INFO:
+			if (debug_mode) snprintf(buf, len, NVLOGD_INFO_MSG, message);
+			else snprintf(buf, len, NVLOG_INFO_MSG, message);
+			pri = LOG_INFO;
+			break;
 
-	case LOG_WARN:
-		snprintf(buf, len, LOG_WARN_MSG, message);
-		break;
-		
-	case LOG_ERROR:
-		snprintf(buf, len, LOG_ERROR_MSG, message);
-		break;
+		case NVLOG_WARN:
+			if (debug_mode) snprintf(buf, len, NVLOGD_WARN_MSG, message);
+			else snprintf(buf, len, NVLOG_WARN_MSG, message);			
+			pri = LOG_WARNING;
+			break;
+			
+		case NVLOG_ERROR:
+			if (debug_mode) snprintf(buf, len, NVLOGD_ERROR_MSG, message);
+			else snprintf(buf, len, NVLOG_ERROR_MSG, message);
+			pri = LOG_ERR;
+			break;
 	}
-	vprintf(buf, argv);
-	fflush(stdout);
+	
+	/* output message */
+	if (log_stdout) {
+		buf[strlen(buf)] = '\n';
+		buf[strlen(buf)+1] = '\0';
+		/* log to standard out */
+		if (type == NVLOG_ERROR) {
+			vfprintf(stderr, buf, argv);
+			fflush(stderr);
+		} else if (debug_mode) {
+			vprintf(buf, argv);
+			fflush(stdout);
+		} else if (type != NVLOG_DEBUG) {
+			vprintf(buf, argv);
+			fflush(stdout);
+		}
+	} else {
+		/* log to syslog - note that we also log NVLOG_ERROR messages to the
+		 * console if we haven't forked yet */
+		if (debug_mode) vsyslog(pri, buf, argv);
+		else if (type != NVLOG_DEBUG) vsyslog(pri, buf, argv);
+		if (type == NVLOG_ERROR && !forked) {
+			buf[strlen(buf)] = '\n';
+			buf[strlen(buf)+1] = '\0';
+			vfprintf(stderr, buf, argv);
+			fflush(stderr);
+		}
+	}
+	
 	va_end(argv);
 	nv_free(buf);
 }

@@ -111,7 +111,7 @@ void pop_generic() {
 
 void yyerror(const char *msg) {
 	fflush(stdout);
-	nv_log(LOG_INFO, "line %d: %s at \"%s\"", lineno, msg, yytext);
+	nv_log(NVLOG_INFO, "line %d: %s at \"%s\"", lineno, msg, yytext);
 }
 
 /* vim: set ts=4 sw=4: */

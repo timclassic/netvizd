@@ -104,7 +104,7 @@ ssize_t readline(int fd, void *vptr, size_t maxlen) {
 	
 	s = pthread_once(&rl_once, readline_once);
 	if (s != 0) {
-		nv_log(LOG_ERROR, "pthread_once: %s", strerror(s));
+		nv_log(NVLOG_ERROR, "pthread_once: %s", strerror(s));
 		n = s;
 		goto cleanup;
 	}
@@ -112,7 +112,7 @@ ssize_t readline(int fd, void *vptr, size_t maxlen) {
 		tsd = nv_calloc(rline_t, 1);
 		s = pthread_setspecific(rl_key, tsd);
 		if (s != 0) {
-			nv_log(LOG_ERROR, "pthread_setspecific: %s", strerror(s));
+			nv_log(NVLOG_ERROR, "pthread_setspecific: %s", strerror(s));
 			n = s;
 			goto cleanup;
 		}
@@ -149,7 +149,7 @@ static void readline_once(void) {
 	int s = 0;
 	s = pthread_key_create(&rl_key, readline_destructor);
 	if (s != 0) {
-		nv_log(LOG_ERROR, "pthread_key_create: %s", strerror(s));
+		nv_log(NVLOG_ERROR, "pthread_key_create: %s", strerror(s));
 	}
 }
 
