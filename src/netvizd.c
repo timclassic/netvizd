@@ -325,7 +325,7 @@ void *_nv_calloc(size_t num, size_t size) {
  * Logging
  */
 void _nv_log(log_type_t type, char *message, ...) {
-	va_list argv = NULL;
+	va_list argv;
 	char *buf = NULL;
 	int len = 0;
 	int pri = LOG_INFO;
