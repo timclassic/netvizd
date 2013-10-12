@@ -1,9 +1,0 @@
-default: all
-
-all:
-	libtoolize --force --ltdl -c
-	aclocal -I m4include
-	autoheader
-	automake
-	autoconf
-

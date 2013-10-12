@@ -4,4 +4,4 @@ These instructions are only useful if you're building from Git - normal
 package builds follow the instructions from INSTALL.  Run the following
 before proceeding with the INSTALL instructions:
 
-    $ make -f Makefile.git
+    $ autoreconf -i

@@ -1,8 +1,11 @@
-AC_PREREQ(2.59)
+AC_PREREQ([2.69])
 AC_INIT([netvizd],[0.1])
+AC_CONFIG_AUX_DIR([config])
 AM_INIT_AUTOMAKE
+
 AC_CONFIG_SRCDIR([config.h.in])
 AC_CONFIG_HEADER([config.h])
+AC_CONFIG_MACRO_DIR([m4include])
 
 # Checks for programs.
 AC_PROG_CXX
@@ -15,10 +18,6 @@ AC_PROG_MAKE_SET
 AC_PROG_YACC
 AM_PROG_LEX
 AC_PATH_PROG([SED], [sed])
-
-# Checks for libraries.
-# FIXME: Replace `main' with a function in `-ldl':
-#AC_CHECK_LIB([dl], [main])
 
 # Checks for header files.
 AC_HEADER_DIRENT
@@ -39,9 +38,9 @@ AC_CHECK_FUNCS([bzero strerror])
 
 # Check for pthreads
 ACX_PTHREAD([],[
-	echo "*** I cannot figure out how to use POSIX threads on your system."
-	echo "*** Please make sure the correct libraries are installed."
-	exit 1
+    echo "*** I cannot figure out how to use POSIX threads on your system."
+    echo "*** Please make sure the correct libraries are installed."
+    exit 1
 ])
 CC="$PTHREAD_CC"
 CFLAGS="$CFLAGS $PTHREAD_CFLAGS"
@@ -55,20 +54,18 @@ LIBS="$LIBS $ETR_SOCKET_LIBS"
 RTS_PGSQL
 
 # Set up ltdl and libtool
-AC_LIBLTDL_CONVENIENCE
-AC_SUBST([LTDLINCL])
-AC_SUBST([LIBLTDL])
-AC_LIBTOOL_DLOPEN
-AM_PROG_LIBTOOL
-AC_CONFIG_SUBDIRS([libltdl])
+LT_PREREQ([2.2])
+LT_INIT([dlopen])
+LT_CONFIG_LTDL_DIR([libltdl])
+LTDL_INIT
 
 AC_CONFIG_FILES([Makefile
-				 src/Makefile
-				 src/plugins/Makefile
-				 src/plugins/config/Makefile
-				 src/plugins/storage/Makefile
-				 src/plugins/sensor/Makefile
-				 src/plugins/proto/Makefile
-				 src/plugins/auth/Makefile])
+                 src/Makefile
+                 src/plugins/Makefile
+                 src/plugins/config/Makefile
+                 src/plugins/storage/Makefile
+                 src/plugins/sensor/Makefile
+                 src/plugins/proto/Makefile
+                 src/plugins/auth/Makefile])
 
 AC_OUTPUT
